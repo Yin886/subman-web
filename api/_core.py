@@ -139,7 +139,8 @@ def add_url_sub(store, name, url):
     return None
 
 
-def add_inline_sub(store, name, text, rename_prefix="", rename_start=1):
+def add_inline_sub(store, name, text, rename_prefix="", rename_start=1,
+                   auto_rename=False):
     if not valid_name(name):
         return "订阅名只允许字母/数字/_/-"
     if name in store["subs"]:
@@ -159,6 +160,8 @@ def add_inline_sub(store, name, text, rename_prefix="", rename_start=1):
             n = ap.parse_full(ln)
             renamed.append(rn.rename_node(n, f"{prefix}{i}") if n else ln)
         lines = renamed
+    elif auto_rename:
+        lines = auto_rename_nodes(store, lines)
     now = _now()
     store["subs"][name] = {"type": "inline", "nodes": lines,
                            "added": now, "count": len(lines)}
@@ -207,6 +210,28 @@ def _now():
 # ---------- 地区旗帜(GeoIP) ----------
 
 FLAG_RE = re.compile(r"^(?:[\U0001F1E6-\U0001F1FF]{2}\s*)+")
+
+COUNTRY_ZH = {
+    "HK": "香港", "TW": "台湾", "MO": "澳门", "CN": "中国",
+    "US": "美国", "CA": "加拿大", "MX": "墨西哥", "BR": "巴西",
+    "AR": "阿根廷", "CL": "智利", "CO": "哥伦比亚", "PE": "秘鲁",
+    "GB": "英国", "IE": "爱尔兰", "FR": "法国", "DE": "德国",
+    "NL": "荷兰", "BE": "比利时", "LU": "卢森堡", "CH": "瑞士",
+    "AT": "奥地利", "ES": "西班牙", "PT": "葡萄牙", "IT": "意大利",
+    "SE": "瑞典", "NO": "挪威", "DK": "丹麦", "FI": "芬兰",
+    "IS": "冰岛", "PL": "波兰", "CZ": "捷克", "SK": "斯洛伐克",
+    "HU": "匈牙利", "RO": "罗马尼亚", "BG": "保加利亚", "GR": "希腊",
+    "HR": "克罗地亚", "SI": "斯洛文尼亚", "EE": "爱沙尼亚",
+    "LV": "拉脱维亚", "LT": "立陶宛", "UA": "乌克兰", "TR": "土耳其",
+    "RU": "俄罗斯", "KZ": "哈萨克斯坦", "IL": "以色列", "AE": "阿联酋",
+    "SA": "沙特", "QA": "卡塔尔",
+    "JP": "日本", "KR": "韩国", "MN": "蒙古",
+    "SG": "新加坡", "MY": "马来西亚", "TH": "泰国", "VN": "越南",
+    "PH": "菲律宾", "ID": "印度尼西亚", "KH": "柬埔寨", "LA": "老挝",
+    "MM": "缅甸", "BD": "孟加拉", "IN": "印度", "PK": "巴基斯坦",
+    "AU": "澳大利亚", "NZ": "新西兰",
+    "ZA": "南非", "EG": "埃及", "NG": "尼日利亚", "KE": "肯尼亚",
+}
 
 
 def strip_leading_flags(name):
@@ -257,16 +282,22 @@ def country_for_host(host):
     return None
 
 
+def _cc_map(hosts):
+    hosts = {h for h in hosts if h}
+    if not hosts:
+        return {}
+    from concurrent.futures import ThreadPoolExecutor
+    out = {}
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        for h, cc in zip(hosts, ex.map(country_for_host, hosts)):
+            if cc:
+                out[h] = cc
+    return out
+
+
 def enrich_flags(nodes):
     """给节点名加地区旗帜前缀。返回覆盖到的国家代码集合。"""
-    hosts = {n["host"].lower() for n in nodes if n.get("host")}
-    cc_map = {}
-    if hosts:
-        from concurrent.futures import ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=8) as ex:
-            for h, cc in zip(hosts, ex.map(country_for_host, hosts)):
-                if cc:
-                    cc_map[h] = cc
+    cc_map = _cc_map({n["host"].lower() for n in nodes if n.get("host")})
     regions = set()
     for n in nodes:
         cc = cc_map.get((n.get("host") or "").lower())
@@ -277,6 +308,43 @@ def enrich_flags(nodes):
         n["name"] = flag_emoji(cc) + base
         n["raw"] = rn.rename_node(n, n["name"])
     return regions
+
+
+NAME_COUNTER_RE = re.compile(r"^(.*?)(\d+)$")
+
+
+def _existing_counters(store):
+    """扫描已有订阅节点名, 返回 {地区前缀: 最大编号}, 避免重名。"""
+    valid = set(COUNTRY_ZH.values()) | set(COUNTRY_ZH.keys())
+    counters = {}
+    for sub in store["subs"].values():
+        for ln in sub.get("nodes", []):
+            n = ap.parse_full(ln)
+            nm = strip_leading_flags((n.get("name") or "") if n else "")
+            m = NAME_COUNTER_RE.match(nm)
+            if m and m.group(1) in valid:
+                counters[m.group(1)] = max(counters.get(m.group(1), 0),
+                                           int(m.group(2)))
+    return counters
+
+
+def auto_rename_nodes(store, lines):
+    """按节点地区自动重命名: 香港1、香港2…美国1…。编号接着已有订阅的最大值。"""
+    parsed = [(ln, ap.parse_full(ln)) for ln in lines]
+    cc_map = _cc_map({n["host"].lower() for _, n in parsed
+                      if n and n.get("host")})
+    counters = _existing_counters(store)
+    out = []
+    for ln, n in parsed:
+        cc = cc_map.get((n.get("host") or "").lower()) if n else None
+        if not n or not cc:
+            out.append(ln)
+            continue
+        zh = COUNTRY_ZH.get(cc, cc)
+        nxt = counters.get(zh, 0) + 1
+        counters[zh] = nxt
+        out.append(rn.rename_node(n, f"{zh}{nxt}"))
+    return out
 
 
 # ---------- 合成订阅 ----------

@@ -56,8 +56,11 @@ label.f{display:block;font-size:13px;color:#666;margin:8px 0 4px}
   <label class="f">名字</label>
   <div class="row"><input type="text" id="in_name" placeholder="如 hk-nodes"></div>
   <div class="row">
-    <input type="text" id="in_prefix" placeholder="命名前缀(可选), 如 香港 → 香港1、香港2…">
+    <input type="text" id="in_prefix" placeholder="命名前缀(可选，填了优先用它，如 香港)">
     <input type="text" id="in_start" placeholder="起始编号" value="1" style="max-width:90px">
+  </div>
+  <div class="row">
+    <label class="chk"><input type="checkbox" id="in_auto" checked> 自动按地区命名(香港1、美国1…，编号接着已有订阅往下排)</label>
   </div>
   <label class="f">节点链接, 每行一条</label>
   <textarea id="in_nodes" placeholder="vmess://…&#10;anytls://…"></textarea>
@@ -124,8 +127,9 @@ async function addInline(){
   const name=document.getElementById('in_name').value.trim(), nodes=document.getElementById('in_nodes').value;
   const rename_prefix=document.getElementById('in_prefix').value.trim();
   const rename_start=parseInt(document.getElementById('in_start').value)||1;
+  const auto_rename=document.getElementById('in_auto').checked && !rename_prefix;
   if(!name||!nodes.trim()){ toast('名字和节点都要填'); return; }
-  const j = await api('/api/subs','POST',{name,type:'inline',nodes,rename_prefix,rename_start});
+  const j = await api('/api/subs','POST',{name,type:'inline',nodes,rename_prefix,rename_start,auto_rename});
   if(!j.ok){ toast(j.error); return; }
   document.getElementById('in_name').value=''; document.getElementById('in_nodes').value='';
   document.getElementById('in_prefix').value='';
