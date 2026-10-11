@@ -65,6 +65,7 @@ label.f{display:block;font-size:13px;color:#666;margin:8px 0 4px}
   <div id="bundle_subs" class="row"></div>
   <div class="row">
     <label class="chk"><input type="checkbox" id="no_dedup"> 保留重复节点(不去重)</label>
+    <label class="chk"><input type="checkbox" id="flags" checked> 节点名称加上地区旗帜</label>
   </div>
   <div class="row"><button onclick="saveBundle()">💾 保存发布设置</button></div>
   <div id="bundle_info" class="muted"></div>
@@ -150,14 +151,18 @@ async function loadBundle(){
     return '<label class="chk"><input type="checkbox" data-sub="'+n+'" '+(on?'checked':'')+'> '+n+'</label>';
   }).join('') || '<p class="muted">暂无订阅</p>';
   document.getElementById('no_dedup').checked = !!j.bundle.no_dedup;
+  document.getElementById('flags').checked = j.bundle.flags !== false;
   document.getElementById('pub_link').textContent = j.link || '—';
   document.getElementById('bundle_info').textContent =
     '当前合并 '+j.count+' 个节点'+(j.unknown?' (无法解析 '+j.unknown+' 行)':'')
+    + (j.regions ? ' 覆盖地区 '+j.regions : '')
     + (j.bundle.updated ? ', 设置更新于 '+fmt(j.bundle.updated) : '');
 }
 async function saveBundle(){
   const subs = [...document.querySelectorAll('#bundle_subs input[data-sub]:checked')].map(e=>e.dataset.sub);
-  const j = await api('/api/bundle','POST',{subs, no_dedup:document.getElementById('no_dedup').checked});
+  const j = await api('/api/bundle','POST',{subs,
+    no_dedup:document.getElementById('no_dedup').checked,
+    flags:document.getElementById('flags').checked});
   if(!j.ok){ toast(j.error); return; }
   toast('已保存'); loadBundle();
 }

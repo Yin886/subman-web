@@ -20,13 +20,16 @@ class handler(BaseHTTPRequestHandler):
         b = store["bundle"]
         host = hh.headers_dict(self).get("host", "")
         try:
-            _out, count, unknown, info = core.build_bundle(store, allow_live_fetch=False)
+            _out, count, unknown, info, regions = core.build_bundle(
+                store, allow_live_fetch=False)
         except Exception as e:
-            count, unknown, info = 0, 0, [["-", 0, f"预览失败: {e}"]]
+            count, unknown, info, regions = 0, 0, [["-", 0, f"预览失败: {e}"]], []
         return {"bundle": {"subs": b["subs"], "no_dedup": b["no_dedup"],
+                           "flags": b.get("flags", True),
                            "updated": b["updated"], "token": b["token"]},
                 "link": core.public_link(host, b["token"]) if host else "",
                 "count": count, "unknown": unknown,
+                "regions": "".join(core.flag_emoji(c) for c in regions),
                 "info": [{"name": n, "lines": c, "note": t} for n, c, t in info],
                 "all_subs": sorted(store["subs"].keys())}
 
@@ -56,6 +59,7 @@ class handler(BaseHTTPRequestHandler):
             return
         store["bundle"]["subs"] = subs
         store["bundle"]["no_dedup"] = bool(body.get("no_dedup"))
+        store["bundle"]["flags"] = bool(body.get("flags", True))
         store["bundle"]["updated"] = core._now()
         core.save_store(store)
         hh.send_json(self, 200, {"ok": True, **self._bundle_info(store)})

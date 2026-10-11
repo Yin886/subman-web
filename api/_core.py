@@ -10,6 +10,7 @@ import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _airportlib as ap  # noqa: E402  (vendored, 仅用标准库)
+import _rename as rn  # noqa: E402
 
 ADMIN_USER = os.environ.get("ADMIN_USER", "")
 ADMIN_PASS = os.environ.get("ADMIN_PASS", "")
@@ -80,7 +81,7 @@ def new_token():
 def default_store():
     return {"subs": {},
             "bundle": {"token": new_token(), "subs": [],
-                       "no_dedup": False, "updated": None}}
+                       "no_dedup": False, "flags": True, "updated": None}}
 
 
 def load_store():
@@ -192,10 +193,85 @@ def _now():
     return int(time.time())
 
 
+# ---------- 地区旗帜(GeoIP) ----------
+
+FLAG_RE = re.compile(r"^(?:[\U0001F1E6-\U0001F1FF]{2}\s*)+")
+
+
+def strip_leading_flags(name):
+    return FLAG_RE.sub("", name or "").strip()
+
+
+def flag_emoji(cc):
+    cc = (cc or "").upper()
+    if len(cc) != 2 or not cc.isalpha():
+        return ""
+    return "".join(chr(0x1F1E6 + ord(c) - ord("A")) for c in cc)
+
+
+def geo_cache_key(host):
+    return f"subman:geo:{host.lower()}"
+
+
+def country_for_host(host):
+    """返回主机所在国家的两位代码, 查不到返回 None。结果缓存于 KV。"""
+    host = (host or "").strip().lower()
+    if not host:
+        return None
+    cached = kv_get(geo_cache_key(host))
+    if cached:
+        return cached if len(cached) == 2 else None
+    ip = None
+    try:
+        import ipaddress
+        ipaddress.ip_address(host)
+        ip = host
+    except Exception:
+        try:
+            import socket
+            ip = socket.gethostbyname(host)
+        except Exception:
+            return None
+    try:
+        url = f"http://ip-api.com/json/{ip}?fields=status,countryCode"
+        req = urllib.request.Request(url, headers={"User-Agent": "subman-web/1.0"})
+        with urllib.request.urlopen(req, timeout=8) as r:
+            d = json.loads(r.read().decode("utf-8"))
+        if d.get("status") == "success" and d.get("countryCode"):
+            cc = d["countryCode"].upper()
+            kv_set(geo_cache_key(host), cc)
+            return cc
+    except Exception:
+        pass
+    return None
+
+
+def enrich_flags(nodes):
+    """给节点名加地区旗帜前缀。返回覆盖到的国家代码集合。"""
+    hosts = {n["host"].lower() for n in nodes if n.get("host")}
+    cc_map = {}
+    if hosts:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            for h, cc in zip(hosts, ex.map(country_for_host, hosts)):
+                if cc:
+                    cc_map[h] = cc
+    regions = set()
+    for n in nodes:
+        cc = cc_map.get((n.get("host") or "").lower())
+        if not cc:
+            continue
+        regions.add(cc)
+        base = strip_leading_flags(n.get("name") or n.get("host") or "")
+        n["name"] = flag_emoji(cc) + base
+        n["raw"] = rn.rename_node(n, n["name"])
+    return regions
+
+
 # ---------- 合成订阅 ----------
 
 def build_bundle(store, allow_live_fetch=True):
-    """返回 (base64文本, 节点数, 无法解析行数, [(订阅名, 行数, 备注)])."""
+    """返回 (base64文本, 节点数, 无法解析行数, [(订阅名, 行数, 备注)], [地区代码])."""
     b = store["bundle"]
     names = b["subs"] or sorted(store["subs"].keys())
     chunks, info = [], []
@@ -228,9 +304,12 @@ def build_bundle(store, allow_live_fetch=True):
         info.append((name, len(ls), None))
     text = "\n".join(chunks)
     nodes, unknown = ap.parse_subscription(text, dedup=not b["no_dedup"])
+    regions = set()
+    if b.get("flags", True) and nodes:
+        regions = enrich_flags(nodes)
     out = base64.b64encode(
         ("\n".join(n["raw"] for n in nodes) + "\n").encode("utf-8")).decode()
-    return out, len(nodes), unknown, info
+    return out, len(nodes), unknown, info, sorted(regions)
 
 
 def public_link(host, token):
