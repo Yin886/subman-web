@@ -1,0 +1,1 @@
+{"regions":["hnd1"],"rewrites":[{"destination":"/api/page","source":"/"},{"destination":"/api/page","source":"/admin"},{"destination":"/api/serve?token=:token","source":"/s/:token"}]}

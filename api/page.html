@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>订阅管理</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;background:#f4f5f7;color:#222;padding:16px;max-width:860px;margin:0 auto}
+h1{font-size:20px;margin:8px 0 16px}
+.card{background:#fff;border-radius:12px;padding:16px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.card h2{font-size:16px;margin-bottom:12px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:8px 6px;border-bottom:1px solid #eee}
+th{color:#888;font-weight:500;font-size:13px}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:12px;background:#eef2ff;color:#3b5bdb}
+.badge.url{background:#e6fcf5;color:#0c8599}
+.row{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+input[type=text],textarea{flex:1;min-width:0;border:1px solid #ddd;border-radius:8px;padding:10px;font-size:14px}
+textarea{min-height:110px;font-family:monospace;resize:vertical}
+button{border:none;border-radius:8px;padding:10px 16px;font-size:14px;cursor:pointer;background:#3b5bdb;color:#fff}
+button.ghost{background:#f1f3f5;color:#333}
+button.danger{background:#fa5252}
+button.small{padding:6px 10px;font-size:13px}
+button:disabled{opacity:.5}
+.linkbox{display:flex;gap:8px;align-items:center;background:#f8f9fa;border:1px dashed #adb5bd;border-radius:8px;padding:10px;font-size:13px;word-break:break-all;margin:10px 0}
+.chk{display:flex;align-items:center;gap:6px;font-size:14px;margin:4px 12px 4px 0}
+.muted{color:#888;font-size:13px}
+#toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);background:#333;color:#fff;padding:10px 18px;border-radius:8px;font-size:14px;display:none;z-index:99}
+label.f{display:block;font-size:13px;color:#666;margin:8px 0 4px}
+</style>
+</head>
+<body>
+<h1>🛰️ 订阅管理</h1>
+
+<div class="card">
+  <h2>订阅列表</h2>
+  <div id="subs"><p class="muted">加载中…</p></div>
+  <div class="row" style="margin-top:10px">
+    <button class="ghost small" onclick="fetchSubs()">🔄 更新全部远程订阅</button>
+  </div>
+</div>
+
+<div class="card">
+  <h2>添加远程订阅</h2>
+  <div class="row">
+    <input type="text" id="url_name" placeholder="名字, 如 airport">
+    <input type="text" id="url_url" placeholder="订阅链接 https://…">
+    <button onclick="addUrl()">添加</button>
+  </div>
+  <p class="muted">链接含 token, 只存服务端, 不会出现在输出里。</p>
+</div>
+
+<div class="card">
+  <h2>粘贴节点</h2>
+  <label class="f">名字</label>
+  <div class="row"><input type="text" id="in_name" placeholder="如 free-20261011"></div>
+  <label class="f">节点链接, 每行一条</label>
+  <textarea id="in_nodes" placeholder="vmess://…&#10;anytls://…"></textarea>
+  <div class="row" style="margin-top:10px"><button onclick="addInline()">保存</button></div>
+</div>
+
+<div class="card">
+  <h2>发布</h2>
+  <div id="bundle_subs" class="row"></div>
+  <div class="row">
+    <label class="chk"><input type="checkbox" id="no_dedup"> 保留重复节点(不去重)</label>
+  </div>
+  <div class="row"><button onclick="saveBundle()">💾 保存发布设置</button></div>
+  <div id="bundle_info" class="muted"></div>
+  <div class="linkbox"><span id="pub_link" style="flex:1">—</span></div>
+  <div class="row">
+    <button class="small" onclick="copyLink()">📋 复制链接</button>
+    <button class="ghost small" onclick="regenToken()">🔀 换新链接</button>
+  </div>
+  <p class="muted">把链接加到 Egern 等客户端当订阅用。链接本身即权限, 换新后旧链接失效。</p>
+</div>
+
+<div id="toast"></div>
+
+<script>
+async function api(path, method, body){
+  const r = await fetch(path, {method: method||'GET',
+    headers:{'Content-Type':'application/json'},
+    body: body?JSON.stringify(body):undefined});
+  if(r.status===401){ toast('登录失效, 请刷新重登'); throw 0; }
+  return r.json();
+}
+function toast(s){ const t=document.getElementById('toast'); t.textContent=s; t.style.display='block';
+  clearTimeout(t._h); t._h=setTimeout(()=>t.style.display='none',2200); }
+function fmt(ts){ if(!ts) return '-'; const d=new Date(ts*1000);
+  return (d.getMonth()+1)+'-'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+
+async function loadSubs(){
+  const j = await api('/api/subs');
+  const box = document.getElementById('subs');
+  const names = Object.keys(j.subs);
+  if(!names.length){ box.innerHTML='<p class="muted">还没有订阅</p>'; return; }
+  let h = '<table><tr><th>名称</th><th>类型</th><th>节点</th><th>更新</th><th>操作</th></tr>';
+  for(const n of names){ const s=j.subs[n];
+    h += '<tr><td>'+n+'</td><td><span class="badge'+(s.type==='url'?' url':'')+'">'+(s.type==='url'?'远程':'内联')+'</span></td>'
+      + '<td>'+(s.count==null?'-':s.count)+'</td><td>'+fmt(s.updated)+'</td>'
+      + '<td><button class="ghost small" onclick="fetchOne(\''+n+'\')">更新</button> '
+      + '<button class="danger small" onclick="delSub(\''+n+'\')">删</button></td></tr>';
+  }
+  box.innerHTML = h+'</table>';
+}
+async function addUrl(){
+  const name=document.getElementById('url_name').value.trim(), url=document.getElementById('url_url').value.trim();
+  if(!name||!url){ toast('名字和链接都要填'); return; }
+  const j = await api('/api/subs','POST',{name,type:'url',url});
+  if(!j.ok){ toast(j.error); return; }
+  document.getElementById('url_name').value=''; document.getElementById('url_url').value='';
+  toast('已添加, 正在拉取…'); loadSubs(); loadBundle();
+  const f = await api('/api/subs?action=fetch','POST',{name});
+  toast(f.results[0].msg); loadSubs(); loadBundle();
+}
+async function addInline(){
+  const name=document.getElementById('in_name').value.trim(), nodes=document.getElementById('in_nodes').value;
+  if(!name||!nodes.trim()){ toast('名字和节点都要填'); return; }
+  const j = await api('/api/subs','POST',{name,type:'inline',nodes});
+  if(!j.ok){ toast(j.error); return; }
+  document.getElementById('in_name').value=''; document.getElementById('in_nodes').value='';
+  toast('已保存'); loadSubs(); loadBundle();
+}
+async function delSub(n){
+  if(!confirm('删除订阅 '+n+' ?')) return;
+  const j = await api('/api/subs?name='+encodeURIComponent(n),'DELETE');
+  if(!j.ok){ toast(j.error); return; }
+  toast('已删除'); loadSubs(); loadBundle();
+}
+async function fetchOne(n){
+  toast('拉取中…');
+  const j = await api('/api/subs?action=fetch','POST',{name:n});
+  toast(j.results[0].msg); loadSubs(); loadBundle();
+}
+async function fetchSubs(){
+  toast('拉取中…');
+  const j = await api('/api/subs?action=fetch','POST',{});
+  const bad = j.results.filter(r=>!r.ok);
+  toast(bad.length ? bad.map(r=>r.msg).join('; ') : '全部更新完成');
+  loadSubs(); loadBundle();
+}
+async function loadBundle(){
+  const j = await api('/api/bundle');
+  if(!j.ok){ toast('发布信息加载失败'); return; }
+  const box = document.getElementById('bundle_subs');
+  box.innerHTML = j.all_subs.map(n=>{
+    const on = !j.bundle.subs.length || j.bundle.subs.includes(n);
+    return '<label class="chk"><input type="checkbox" data-sub="'+n+'" '+(on?'checked':'')+'> '+n+'</label>';
+  }).join('') || '<p class="muted">暂无订阅</p>';
+  document.getElementById('no_dedup').checked = !!j.bundle.no_dedup;
+  document.getElementById('pub_link').textContent = j.link || '—';
+  document.getElementById('bundle_info').textContent =
+    '当前合并 '+j.count+' 个节点'+(j.unknown?' (无法解析 '+j.unknown+' 行)':'')
+    + (j.bundle.updated ? ', 设置更新于 '+fmt(j.bundle.updated) : '');
+}
+async function saveBundle(){
+  const subs = [...document.querySelectorAll('#bundle_subs input[data-sub]:checked')].map(e=>e.dataset.sub);
+  const j = await api('/api/bundle','POST',{subs, no_dedup:document.getElementById('no_dedup').checked});
+  if(!j.ok){ toast(j.error); return; }
+  toast('已保存'); loadBundle();
+}
+async function regenToken(){
+  if(!confirm('换新链接后旧链接立即失效, 继续?')) return;
+  const j = await api('/api/bundle?action=token','POST',{});
+  if(!j.ok){ toast('失败'); return; }
+  document.getElementById('pub_link').textContent = j.link;
+  toast('已换新链接');
+}
+function copyLink(){
+  const t = document.getElementById('pub_link').textContent;
+  if(!t || t==='—'){ toast('没有链接'); return; }
+  navigator.clipboard.writeText(t).then(()=>toast('已复制')).catch(()=>toast('复制失败, 长按手动复制'));
+}
+loadSubs(); loadBundle();
+</script>
+</body>
+</html>
