@@ -53,7 +53,9 @@ class handler(BaseHTTPRequestHandler):
         if typ == "url":
             err = core.add_url_sub(store, name, body.get("url", ""))
         elif typ == "inline":
-            err = core.add_inline_sub(store, name, body.get("nodes", ""))
+            err = core.add_inline_sub(store, name, body.get("nodes", ""),
+                                      body.get("rename_prefix", ""),
+                                      body.get("rename_start", 1))
         else:
             err = "type 须为 url 或 inline"
         if err:

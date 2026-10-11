@@ -139,7 +139,7 @@ def add_url_sub(store, name, url):
     return None
 
 
-def add_inline_sub(store, name, text):
+def add_inline_sub(store, name, text, rename_prefix="", rename_start=1):
     if not valid_name(name):
         return "订阅名只允许字母/数字/_/-"
     if name in store["subs"]:
@@ -148,6 +148,17 @@ def add_inline_sub(store, name, text):
              if l.strip() and "://" in l]
     if not lines:
         return "没有读到节点链接"
+    prefix = (rename_prefix or "").strip()
+    if prefix:
+        try:
+            start = int(rename_start or 1)
+        except Exception:
+            start = 1
+        renamed = []
+        for i, ln in enumerate(lines, start):
+            n = ap.parse_full(ln)
+            renamed.append(rn.rename_node(n, f"{prefix}{i}") if n else ln)
+        lines = renamed
     now = _now()
     store["subs"][name] = {"type": "inline", "nodes": lines,
                            "added": now, "count": len(lines)}
