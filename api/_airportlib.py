@@ -57,10 +57,10 @@ def b64decode_text(s):
         return raw.decode("utf-8", errors="replace")
 
 
-def fetch_source(source):
+def fetch_source(source, ua=None):
     """返回 (原始文本, 脱敏后的来源描述)。source 可为 URL 或本地文件路径。"""
     if re.match(r"^https?://", source, re.I):
-        req = urllib.request.Request(source, headers={"User-Agent": UA})
+        req = urllib.request.Request(source, headers={"User-Agent": ua or UA})
         with urllib.request.urlopen(req, timeout=30) as r:
             raw = r.read().decode("utf-8", errors="replace")
         u = urllib.parse.urlsplit(source)

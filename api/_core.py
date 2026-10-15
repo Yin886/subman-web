@@ -21,6 +21,9 @@ LOCAL_DIR = os.environ.get("SUBMAN_LOCAL_DIR", "")  # 本地测试用: 文件后
 STORE_KEY = "subman:store"
 NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
 CLASH_RE = re.compile(r"^\s*proxies\s*:", re.M)
+# 有些订阅按 UA 返回不同格式(如 liangxin), 用浏览器 UA 拿通用 URI 格式
+FETCH_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
 
 
 # ---------- 存储(KV REST / 本地文件) ----------
@@ -211,7 +214,7 @@ def fetch_sub(store, name):
     if sub["type"] != "url":
         return f"{name} 是内联订阅, 无需拉取"
     try:
-        raw, _desc = ap.fetch_source(sub["url"])
+        raw, _desc = ap.fetch_source(sub["url"], ua=FETCH_UA)
     except Exception as e:
         return f"{name}: 拉取失败 {e}"
     if CLASH_RE.search(ap.normalize(raw)):
