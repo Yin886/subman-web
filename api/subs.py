@@ -93,7 +93,11 @@ class handler(BaseHTTPRequestHandler):
             if sub["type"] == "url":
                 err = core.edit_url_sub(store, name, body.get("url", ""))
             else:
-                err = core.edit_inline_sub(store, name, body.get("nodes", ""))
+                err = core.edit_inline_sub(
+                    store, name, body.get("nodes", ""),
+                    body.get("rename_prefix", ""),
+                    body.get("rename_start", 1),
+                    body.get("auto_rename", False))
             if err:
                 hh.send_json(self, 400, {"ok": False, "error": err})
                 return

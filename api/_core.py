@@ -262,16 +262,9 @@ def add_url_sub(store, name, url):
     return None
 
 
-def add_inline_sub(store, name, text, rename_prefix="", rename_start=1,
-                   auto_rename=False):
-    if not valid_name(name):
-        return "订阅名只允许字母/数字/_/-"
-    if name in store["subs"]:
-        return f"已存在名为 {name} 的订阅"
-    lines = [l.strip() for l in (text or "").splitlines()
-             if l.strip() and "://" in l]
-    if (text or "").strip() and not lines:
-        return "没有读到节点链接"
+def _apply_rename(store, lines, rename_prefix="", rename_start=1,
+                 auto_rename=False, exclude=None):
+    """命名前缀优先, 否则按地区自动命名。返回重命名后的 lines。"""
     prefix = (rename_prefix or "").strip()
     if prefix:
         try:
@@ -282,9 +275,24 @@ def add_inline_sub(store, name, text, rename_prefix="", rename_start=1,
         for i, ln in enumerate(lines, start):
             n = ap.parse_full(ln)
             renamed.append(rn.rename_node(n, f"{prefix}{i}") if n else ln)
-        lines = renamed
-    elif auto_rename:
-        lines = auto_rename_nodes(store, lines)
+        return renamed
+    if auto_rename:
+        return auto_rename_nodes(store, lines, exclude)
+    return lines
+
+
+def add_inline_sub(store, name, text, rename_prefix="", rename_start=1,
+                   auto_rename=False):
+    if not valid_name(name):
+        return "订阅名只允许字母/数字/_/-"
+    if name in store["subs"]:
+        return f"已存在名为 {name} 的订阅"
+    lines = [l.strip() for l in (text or "").splitlines()
+             if l.strip() and "://" in l]
+    if (text or "").strip() and not lines:
+        return "没有读到节点链接"
+    lines = _apply_rename(store, lines, rename_prefix, rename_start,
+                          auto_rename)
     now = _now()
     store["subs"][name] = {"type": "inline", "nodes": lines,
                            "added": now, "count": len(lines),
@@ -367,8 +375,10 @@ def edit_url_sub(store, name, url):
     return None
 
 
-def edit_inline_sub(store, name, text):
-    """改内联订阅节点原文。text 为空时保留原节点(只改配置的场景)。"""
+def edit_inline_sub(store, name, text, rename_prefix="", rename_start=1,
+                    auto_rename=False):
+    """改内联订阅节点原文。text 为空时保留原节点(只改配置的场景)。
+    填了命名前缀或勾选自动命名时, 对新节点重新命名。"""
     sub = store["subs"].get(name)
     if not sub:
         return "没有这个订阅"
@@ -379,6 +389,8 @@ def edit_inline_sub(store, name, text):
     if (text or "").strip() and not lines:
         return "没有读到节点链接"
     if lines:
+        lines = _apply_rename(store, lines, rename_prefix, rename_start,
+                              auto_rename, exclude=name)
         sub["nodes"] = lines
         sub["count"] = len(lines)
         sub["added"] = _now()
@@ -519,11 +531,14 @@ def enrich_flags(nodes):
 NAME_COUNTER_RE = re.compile(r"^(.*?)(\d+)$")
 
 
-def _existing_counters(store):
-    """扫描已有订阅节点名, 返回 {地区前缀: 最大编号}, 避免重名。"""
+def _existing_counters(store, exclude=None):
+    """扫描已有订阅节点名, 返回 {地区前缀: 最大编号}, 避免重名。
+    exclude: 排除某个订阅(编辑它时, 不把自己的旧节点算进去)。"""
     valid = set(COUNTRY_ZH.values()) | set(COUNTRY_ZH.keys())
     counters = {}
-    for sub in store["subs"].values():
+    for name, sub in store["subs"].items():
+        if exclude and name == exclude:
+            continue
         for ln in sub.get("nodes", []):
             n = ap.parse_full(ln)
             nm = strip_leading_flags((n.get("name") or "") if n else "")
@@ -534,12 +549,12 @@ def _existing_counters(store):
     return counters
 
 
-def auto_rename_nodes(store, lines):
+def auto_rename_nodes(store, lines, exclude=None):
     """按节点地区自动重命名: 香港1、香港2…美国1…。编号接着已有订阅的最大值。"""
     parsed = [(ln, ap.parse_full(ln)) for ln in lines]
     cc_map = _cc_map({n["host"].lower() for _, n in parsed
                       if n and n.get("host")})
-    counters = _existing_counters(store)
+    counters = _existing_counters(store, exclude)
     out = []
     for ln, n in parsed:
         cc = cc_map.get((n.get("host") or "").lower()) if n else None
