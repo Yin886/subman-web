@@ -19,7 +19,7 @@ KV_TOKEN = os.environ.get("KV_REST_API_TOKEN", "")
 LOCAL_DIR = os.environ.get("SUBMAN_LOCAL_DIR", "")  # 本地测试用: 文件后端目录
 
 STORE_KEY = "subman:store"
-NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
+
 CLASH_RE = re.compile(r"^\s*proxies\s*:", re.M)
 # 有些订阅按 UA 返回不同格式(如 liangxin), 用浏览器 UA 拿通用 URI 格式
 FETCH_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -271,12 +271,19 @@ def check_auth(headers):
 # ---------- 订阅管理 ----------
 
 def valid_name(name):
-    return bool(NAME_RE.match(name or ""))
+    name = (name or "").strip()
+    if not name or len(name) > 64:
+        return False
+    return not any(c in name for c in "/\\\n\r")
+
+
+SUB_NAME_ERR = "订阅名 1-64 个字符, 不能含 / 或换行"
 
 
 def add_url_sub(store, name, url):
+    name = (name or "").strip()
     if not valid_name(name):
-        return "订阅名只允许字母/数字/_/-"
+        return SUB_NAME_ERR
     if name in store["subs"]:
         return f"已存在名为 {name} 的订阅"
     if not re.match(r"^https?://", url or "", re.I):
@@ -310,8 +317,9 @@ def _apply_rename(store, lines, rename_prefix="", rename_start=1,
 
 def add_inline_sub(store, name, text, rename_prefix="", rename_start=1,
                    auto_rename=False):
+    name = (name or "").strip()
     if not valid_name(name):
-        return "订阅名只允许字母/数字/_/-"
+        return SUB_NAME_ERR
     if name in store["subs"]:
         return f"已存在名为 {name} 的订阅"
     lines = [l.strip() for l in (text or "").splitlines()
