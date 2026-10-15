@@ -92,6 +92,17 @@ label.f{display:block;font-size:13px;color:#666;margin:8px 0 4px}
   <p class="muted">把链接加到 Egern 等客户端当订阅用。链接本身即权限, 换新后旧链接失效。</p>
 </div>
 
+<div class="card">
+  <h2>后台账号</h2>
+  <div class="row">
+    <input type="text" id="adm_user" placeholder="新用户名" autocomplete="username">
+    <input type="password" id="adm_pass" placeholder="新密码" autocomplete="new-password">
+    <input type="password" id="adm_pass2" placeholder="再输一次密码" autocomplete="new-password">
+  </div>
+  <div class="row"><button onclick="changePasswd()">🔑 修改账号密码</button></div>
+  <p class="muted">修改后立即生效, 下次打开后台用新账号密码登录。</p>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -198,6 +209,19 @@ function copyLink(){
   const t = document.getElementById('pub_link').textContent;
   if(!t || t==='—'){ toast('没有链接'); return; }
   navigator.clipboard.writeText(t).then(()=>toast('已复制')).catch(()=>toast('复制失败, 长按手动复制'));
+}
+async function changePasswd(){
+  const user=document.getElementById('adm_user').value.trim();
+  const pw=document.getElementById('adm_pass').value, pw2=document.getElementById('adm_pass2').value;
+  if(!user||!pw){ toast('用户名和密码都要填'); return; }
+  if(pw!==pw2){ toast('两次密码不一致'); return; }
+  if(!confirm('确定把后台账号改成 '+user+' ?')) return;
+  const j = await api('/api/admin','POST',{action:'passwd',user,pass:pw});
+  if(!j.ok){ toast(j.error); return; }
+  document.getElementById('adm_user').value='';
+  document.getElementById('adm_pass').value='';
+  document.getElementById('adm_pass2').value='';
+  toast('已修改, 下次用新账号密码登录');
 }
 loadSubs(); loadBundle();
 </script>

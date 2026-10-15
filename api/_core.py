@@ -108,8 +108,32 @@ def cache_key(name):
 
 # ---------- 认证 ----------
 
+ADMIN_KEY = "subman:admin"
+
+
+def get_admin_creds():
+    """KV 优先(KV 缺失时用环境变量初始化一次); KV 读失败回退环境变量。"""
+    try:
+        raw = kv_get(ADMIN_KEY)
+        if raw:
+            d = json.loads(raw)
+            if d.get("user") and d.get("pass"):
+                return d["user"], d["pass"]
+        if ADMIN_USER and ADMIN_PASS:
+            kv_set(ADMIN_KEY, json.dumps({"user": ADMIN_USER, "pass": ADMIN_PASS}))
+            return ADMIN_USER, ADMIN_PASS
+    except Exception:
+        pass
+    return ADMIN_USER, ADMIN_PASS
+
+
+def set_admin_creds(user, pw):
+    kv_set(ADMIN_KEY, json.dumps({"user": user, "pass": pw}))
+
+
 def check_auth(headers):
-    if not ADMIN_USER or not ADMIN_PASS:
+    user, pw = get_admin_creds()
+    if not user or not pw:
         return False
     auth = headers.get("authorization", "")
     if not auth.startswith("Basic "):
@@ -118,7 +142,7 @@ def check_auth(headers):
         u, p = base64.b64decode(auth[6:]).decode("utf-8").split(":", 1)
     except Exception:
         return False
-    return u == ADMIN_USER and p == ADMIN_PASS
+    return u == user and p == pw
 
 
 # ---------- 订阅管理 ----------
