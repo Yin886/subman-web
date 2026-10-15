@@ -118,10 +118,23 @@ def find_by_token(store, token):
     return None
 
 
+def _prefix_sub_name(lines, sub_name):
+    """节点名称前加上订阅名称, 如 'liangxin 香港1'，便于在组合里分辨来源。"""
+    out = []
+    for ln in lines:
+        n = ap.parse_full(ln)
+        if n:
+            base = (n.get("name") or n.get("host") or "").strip()
+            out.append(rn.rename_node(n, f"{sub_name} {base}".strip()))
+        else:
+            out.append(ln)
+    return out
+
+
 def default_bundle_cfg():
     return {"token": new_token(), "subs": [], "no_dedup": False,
             "flags": True, "ip_filter": "all", "region_filter": "",
-            "updated": None}
+            "sub_name_prefix": False, "updated": None}
 
 
 def default_store():
@@ -188,6 +201,9 @@ def _migrate(s):
     for _b in s.get("bundles", {}).values():
         if "region_filter" not in _b:
             _b["region_filter"] = ""
+            changed = True
+        if "sub_name_prefix" not in _b:
+            _b["sub_name_prefix"] = False
             changed = True
     for sub in s.get("subs", {}).values():
         for k, v in (("no_dedup", False), ("flags", True),
@@ -349,7 +365,7 @@ def add_bundle(store, name):
     store["bundles"][name] = {
         "token": unique_token(store), "subs": [],
         "no_dedup": False, "flags": True, "ip_filter": "all",
-        "region_filter": "", "updated": None}
+        "region_filter": "", "sub_name_prefix": False, "updated": None}
     return None
 
 
@@ -375,7 +391,7 @@ def filter_by_region(nodes, region_filter):
 
 
 def update_bundle(store, name, subs, no_dedup, flags, ip_filter,
-                   region_filter=""):
+                   region_filter="", sub_name_prefix=False):
     b = store["bundles"].get(name)
     if not b:
         return "没有这个组合"
@@ -384,6 +400,7 @@ def update_bundle(store, name, subs, no_dedup, flags, ip_filter,
     b["flags"] = bool(flags)
     b["ip_filter"] = ip_filter if ip_filter in ("all", "v4", "v6") else "all"
     b["region_filter"] = (region_filter or "").strip()
+    b["sub_name_prefix"] = bool(sub_name_prefix)
     b["updated"] = _now()
     return None
 
@@ -682,6 +699,8 @@ def build_bundle(store, cfg, allow_live_fetch=True, only=None):
             continue
         if sub["type"] == "inline":
             ls = sub["nodes"]
+            if cfg.get("sub_name_prefix") and ls:
+                ls = _prefix_sub_name(ls, name)
             chunks.append("\n".join(ls))
             info.append((name, len(ls), None))
             continue
@@ -706,6 +725,8 @@ def build_bundle(store, cfg, allow_live_fetch=True, only=None):
                                sub.get("rename_start", 1),
                                sub.get("auto_rename", False),
                                exclude=name)
+        if cfg.get("sub_name_prefix") and ls:
+            ls = _prefix_sub_name(ls, name)
         chunks.append("\n".join(ls))
         info.append((name, len(ls), None))
     text = "\n".join(chunks)

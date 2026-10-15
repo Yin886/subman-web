@@ -262,7 +262,8 @@ async function loadBundles(){
       + '<option value="v4"'+(b.ip_filter==='v4'?' selected':'')+'>仅 IPv4</option>'
       + '<option value="v6"'+(b.ip_filter==='v6'?' selected':'')+'>仅 IPv6</option>'
       + '</select></label>'
-      + '<label class="chk">只保留地区 <input type="text" data-brg="'+i+'" placeholder="如 香港，留空=全部" value="'+esc(b.region_filter||'')+'" style="max-width:90px"></label></div>'
+      + '<label class="chk">只保留地区 <input type="text" data-brg="'+i+'" placeholder="如 香港，留空=全部" value="'+esc(b.region_filter||'')+'" style="max-width:90px"></label>'
+      + '<label class="chk"><input type="checkbox" data-bpf="'+i+'" '+(b.sub_name_prefix?'checked':'')+'> 名称前加订阅名(如 liangxin 香港1)</label></div>'
       + '<div class="row"><button onclick="saveBundle('+i+')">💾 保存组合设置</button></div>'
       + '<div class="muted">当前合并 '+b.count+' 个节点'+(b.unknown?' (无法解析 '+b.unknown+' 行)':'')
       + (b.region_filter ? ' 只保留'+esc(b.region_filter) : '')
@@ -290,7 +291,8 @@ async function saveBundle(i){
     no_dedup: card.querySelector('input[data-bnd]').checked,
     flags: card.querySelector('input[data-bfl]').checked,
     ip_filter: card.querySelector('select[data-bip]').value,
-    region_filter: card.querySelector('input[data-brg]').value.trim()});
+    region_filter: card.querySelector('input[data-brg]').value.trim(),
+    sub_name_prefix: card.querySelector('input[data-bpf]').checked});
   if(!j.ok){ toast(j.error); return; }
   toast('已保存'); loadBundles();
 }

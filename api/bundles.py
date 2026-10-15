@@ -21,6 +21,7 @@ def _bundle_info(store, host):
                       "flags": b.get("flags", True),
                       "ip_filter": b.get("ip_filter", "all"),
                       "region_filter": b.get("region_filter", ""),
+                      "sub_name_prefix": bool(b.get("sub_name_prefix")),
                       "token": b["token"],
                       "link": core.public_link(host, b["token"]) if host else "",
                       "count": count, "unknown": unknown,
@@ -61,7 +62,8 @@ class handler(BaseHTTPRequestHandler):
                                      body.get("no_dedup"),
                                      body.get("flags", True),
                                      body.get("ip_filter", "all"),
-                                     body.get("region_filter", ""))
+                                     body.get("region_filter", ""),
+                                     body.get("sub_name_prefix", False))
         elif action == "token":
             err = core.regen_bundle_token(store, name)
         elif action == "delete":
