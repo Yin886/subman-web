@@ -49,7 +49,13 @@ class handler(BaseHTTPRequestHandler):
                                             "no_dedup": bool(sub.get("no_dedup")),
                                             "flags": sub.get("flags", True),
                                             "ip_filter": sub.get("ip_filter",
-                                                                 "all")}})
+                                                                 "all"),
+                                            "rename_prefix": sub.get(
+                                                "rename_prefix", ""),
+                                            "rename_start": sub.get(
+                                                "rename_start", 1),
+                                            "auto_rename": bool(sub.get(
+                                                "auto_rename"))}})
             return
         summary = _summary(store)
         core.save_store(store)  # 补上老订阅缺失的 solo_token
@@ -92,6 +98,13 @@ class handler(BaseHTTPRequestHandler):
                 return
             if sub["type"] == "url":
                 err = core.edit_url_sub(store, name, body.get("url", ""))
+                if err:
+                    hh.send_json(self, 400, {"ok": False, "error": err})
+                    return
+                err = core.set_sub_rename(store, name,
+                                          body.get("rename_prefix", ""),
+                                          body.get("rename_start", 1),
+                                          body.get("auto_rename", False))
             else:
                 err = core.edit_inline_sub(
                     store, name, body.get("nodes", ""),

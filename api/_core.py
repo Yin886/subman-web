@@ -134,6 +134,20 @@ def _solo_cfg(sub):
             "ip_filter": sub.get("ip_filter", "all")}
 
 
+def set_sub_rename(store, name, rename_prefix, rename_start, auto_rename):
+    """保存远程订阅的重命名偏好, 发布时应用。"""
+    sub = store["subs"].get(name)
+    if not sub:
+        return "没有这个订阅"
+    sub["rename_prefix"] = (rename_prefix or "").strip()
+    try:
+        sub["rename_start"] = int(rename_start or 1)
+    except Exception:
+        sub["rename_start"] = 1
+    sub["auto_rename"] = bool(auto_rename)
+    return None
+
+
 def set_sub_config(store, name, no_dedup, flags, ip_filter):
     sub = store["subs"].get(name)
     if not sub:
@@ -171,7 +185,9 @@ def _migrate(s):
             sub.setdefault("ip_filter", sd.get("ip_filter", "all"))
         changed = True
     for sub in s.get("subs", {}).values():
-        for k, v in (("no_dedup", False), ("flags", True), ("ip_filter", "all")):
+        for k, v in (("no_dedup", False), ("flags", True),
+                     ("ip_filter", "all"), ("rename_prefix", ""),
+                     ("rename_start", 1), ("auto_rename", False)):
             if k not in sub:
                 sub[k] = v
                 changed = True
@@ -657,6 +673,11 @@ def build_bundle(store, cfg, allow_live_fetch=True, only=None):
             continue
         norm = ap.normalize(raw)
         ls = [l for l in norm.splitlines() if l.strip()]
+        if sub.get("rename_prefix") or sub.get("auto_rename"):
+            ls = _apply_rename(store, ls, sub.get("rename_prefix", ""),
+                               sub.get("rename_start", 1),
+                               sub.get("auto_rename", False),
+                               exclude=name)
         chunks.append("\n".join(ls))
         info.append((name, len(ls), None))
     text = "\n".join(chunks)

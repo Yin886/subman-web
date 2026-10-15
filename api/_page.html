@@ -71,17 +71,10 @@ label.f{display:block;font-size:13px;color:#666;margin:8px 0 4px}
   <h2>添加本地订阅</h2>
   <label class="f">名字</label>
   <div class="row"><input type="text" id="in_name" placeholder="如 hk-nodes"></div>
-  <div class="row">
-    <input type="text" id="in_prefix" placeholder="命名前缀(可选，填了优先用它，如 香港)">
-    <input type="text" id="in_start" placeholder="起始编号" value="1" style="max-width:90px">
-  </div>
-  <div class="row">
-    <label class="chk"><input type="checkbox" id="in_auto" checked> 自动按地区命名(香港1、美国1…，编号接着已有订阅往下排)</label>
-  </div>
   <label class="f">节点链接, 每行一条(可先不填，只填名字也能建好)</label>
   <textarea id="in_nodes" placeholder="vmess://…&#10;anytls://…"></textarea>
   <div class="row" style="margin-top:10px"><button onclick="addInline()">添加</button></div>
-  <p class="muted">只填名字也能先建好，之后点订阅列表里的"编辑"再粘贴节点进去。</p>
+  <p class="muted">只填名字也能先建好，之后点订阅列表里的"编辑"粘贴节点、按地区重命名。</p>
 </div>
 
 <h2 class="sec">🧩 组合订阅</h2>
@@ -155,15 +148,20 @@ async function editSub(n){
   document.getElementById('edit_title').textContent = n;
   const body = document.getElementById('edit_body');
   let h = '';
+  const rn_sec = (p)=>{
+    p = p||{};
+    return '<label class="f">重新命名(可选'+(j.sub.type==='url'?'，对拉取到的节点生效':'，不填则保留原节点名')+')</label>'
+      + '<div class="row"><input type="text" id="edit_prefix" placeholder="命名前缀(可选，如 香港)" value="'+esc(p.rename_prefix||'')+'">'
+      + '<input type="text" id="edit_start" placeholder="起始编号" value="'+(p.rename_start||1)+'" style="max-width:90px"></div>'
+      + '<div class="row"><label class="chk"><input type="checkbox" id="edit_auto" '+(p.auto_rename?'checked':'')+'> 自动按地区命名(编号接着已有订阅往下排)</label></div>';
+  };
   if(j.sub.type==='url'){
-    h += '<label class="f">订阅链接</label><div class="row"><input type="text" id="edit_url" value="'+esc(j.sub.url)+'"></div>';
-    document.getElementById('edit_hint').textContent = '保存后点"更新"重新拉取。';
+    h += '<label class="f">订阅链接</label><div class="row"><input type="text" id="edit_url" value="'+esc(j.sub.url)+'"></div>'
+      + rn_sec(j.sub);
+    document.getElementById('edit_hint').textContent = '改了链接要点"更新"重新拉取；重命名保存后直接生效。';
   }else{
     h += '<label class="f">节点链接, 每行一条</label><textarea id="edit_nodes">'+esc(j.sub.nodes)+'</textarea>'
-      + '<label class="f">重新命名(可选, 不填则保留原节点名)</label>'
-      + '<div class="row"><input type="text" id="edit_prefix" placeholder="命名前缀(可选, 如 香港)">'
-      + '<input type="text" id="edit_start" placeholder="起始编号" value="1" style="max-width:90px"></div>'
-      + '<div class="row"><label class="chk"><input type="checkbox" id="edit_auto"> 自动按地区命名(编号接着已有订阅往下排)</label></div>';
+      + rn_sec(null);
     document.getElementById('edit_hint').textContent = '保存后直接生效。';
   }
   h += '<label class="f">单独链接的发布设置(只影响这个订阅的单独链接)</label><div class="row">'
@@ -190,10 +188,10 @@ async function saveEdit(){
     if(!payload.url){ toast('链接不能为空'); return; }
   }else{
     payload.nodes = document.getElementById('edit_nodes').value;
-    payload.rename_prefix = document.getElementById('edit_prefix').value.trim();
-    payload.rename_start = parseInt(document.getElementById('edit_start').value)||1;
-    payload.auto_rename = document.getElementById('edit_auto').checked;
   }
+  payload.rename_prefix = document.getElementById('edit_prefix').value.trim();
+  payload.rename_start = parseInt(document.getElementById('edit_start').value)||1;
+  payload.auto_rename = document.getElementById('edit_auto').checked;
   payload.no_dedup = document.getElementById('edit_nd').checked;
   payload.flags = document.getElementById('edit_fl').checked;
   payload.ip_filter = document.getElementById('edit_ip').value;
@@ -213,14 +211,10 @@ async function addUrl(){
 }
 async function addInline(){
   const name=document.getElementById('in_name').value.trim(), nodes=document.getElementById('in_nodes').value;
-  const rename_prefix=document.getElementById('in_prefix').value.trim();
-  const rename_start=parseInt(document.getElementById('in_start').value)||1;
-  const auto_rename=document.getElementById('in_auto').checked && !rename_prefix;
   if(!name){ toast('名字不能为空'); return; }
-  const j = await api('/api/subs','POST',{name,type:'inline',nodes,rename_prefix,rename_start,auto_rename});
+  const j = await api('/api/subs','POST',{name,type:'inline',nodes});
   if(!j.ok){ toast(j.error); return; }
   document.getElementById('in_name').value=''; document.getElementById('in_nodes').value='';
-  document.getElementById('in_prefix').value='';
   toast(nodes.trim() ? '已保存' : '已创建, 点"编辑"可补充节点'); loadSubs(); loadBundles();
 }
 async function delSub(n){
