@@ -270,7 +270,7 @@ def add_inline_sub(store, name, text, rename_prefix="", rename_start=1,
         return f"已存在名为 {name} 的订阅"
     lines = [l.strip() for l in (text or "").splitlines()
              if l.strip() and "://" in l]
-    if not lines:
+    if (text or "").strip() and not lines:
         return "没有读到节点链接"
     prefix = (rename_prefix or "").strip()
     if prefix:
@@ -368,6 +368,7 @@ def edit_url_sub(store, name, url):
 
 
 def edit_inline_sub(store, name, text):
+    """改内联订阅节点原文。text 为空时保留原节点(只改配置的场景)。"""
     sub = store["subs"].get(name)
     if not sub:
         return "没有这个订阅"
@@ -375,11 +376,12 @@ def edit_inline_sub(store, name, text):
         return f"{name} 不是粘贴订阅, 不能改节点"
     lines = [l.strip() for l in (text or "").splitlines()
              if l.strip() and "://" in l]
-    if not lines:
+    if (text or "").strip() and not lines:
         return "没有读到节点链接"
-    sub["nodes"] = lines
-    sub["count"] = len(lines)
-    sub["added"] = _now()
+    if lines:
+        sub["nodes"] = lines
+        sub["count"] = len(lines)
+        sub["added"] = _now()
     return None
 
 

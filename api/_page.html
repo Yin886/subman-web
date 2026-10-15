@@ -68,7 +68,7 @@ label.f{display:block;font-size:13px;color:#666;margin:8px 0 4px}
 </div>
 
 <div class="card">
-  <h2>粘贴节点</h2>
+  <h2>添加本地订阅</h2>
   <label class="f">名字</label>
   <div class="row"><input type="text" id="in_name" placeholder="如 hk-nodes"></div>
   <div class="row">
@@ -78,9 +78,10 @@ label.f{display:block;font-size:13px;color:#666;margin:8px 0 4px}
   <div class="row">
     <label class="chk"><input type="checkbox" id="in_auto" checked> 自动按地区命名(香港1、美国1…，编号接着已有订阅往下排)</label>
   </div>
-  <label class="f">节点链接, 每行一条</label>
+  <label class="f">节点链接, 每行一条(可先不填，只填名字也能建好)</label>
   <textarea id="in_nodes" placeholder="vmess://…&#10;anytls://…"></textarea>
-  <div class="row" style="margin-top:10px"><button onclick="addInline()">保存</button></div>
+  <div class="row" style="margin-top:10px"><button onclick="addInline()">添加</button></div>
+  <p class="muted">只填名字也能先建好，之后点订阅列表里的"编辑"再粘贴节点进去。</p>
 </div>
 
 <h2 class="sec">🧩 组合订阅</h2>
@@ -185,7 +186,6 @@ async function saveEdit(){
     if(!payload.url){ toast('链接不能为空'); return; }
   }else{
     payload.nodes = document.getElementById('edit_nodes').value;
-    if(!payload.nodes.trim()){ toast('节点不能为空'); return; }
   }
   payload.no_dedup = document.getElementById('edit_nd').checked;
   payload.flags = document.getElementById('edit_fl').checked;
@@ -209,12 +209,12 @@ async function addInline(){
   const rename_prefix=document.getElementById('in_prefix').value.trim();
   const rename_start=parseInt(document.getElementById('in_start').value)||1;
   const auto_rename=document.getElementById('in_auto').checked && !rename_prefix;
-  if(!name||!nodes.trim()){ toast('名字和节点都要填'); return; }
+  if(!name){ toast('名字不能为空'); return; }
   const j = await api('/api/subs','POST',{name,type:'inline',nodes,rename_prefix,rename_start,auto_rename});
   if(!j.ok){ toast(j.error); return; }
   document.getElementById('in_name').value=''; document.getElementById('in_nodes').value='';
   document.getElementById('in_prefix').value='';
-  toast('已保存'); loadSubs(); loadBundles();
+  toast(nodes.trim() ? '已保存' : '已创建, 点"编辑"可补充节点'); loadSubs(); loadBundles();
 }
 async function delSub(n){
   if(!confirm('删除订阅 '+n+' ? 相关组合里的勾选也会一并移除')) return;

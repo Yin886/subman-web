@@ -1,0 +1,85 @@
+{
+ "backed_up_at": "20261015-132217 +08:00",
+ "subs_summary": {
+  "liangxin": {
+   "type": "url",
+   "kind": "uri",
+   "count": 40,
+   "updated": 1792041381,
+   "solo_token": "msOnT31e9inEIZ01c3gfWU3AouIDW5Cm",
+   "no_dedup": false,
+   "flags": true,
+   "ip_filter": "v4"
+  },
+  "1": {
+   "type": "url",
+   "kind": "uri",
+   "count": 12,
+   "updated": 1792039543,
+   "solo_token": "MZcb8I83-c5PQL26QxdIPpEl5MgA6siJ",
+   "no_dedup": false,
+   "flags": true,
+   "ip_filter": "v4"
+  },
+  "2": {
+   "type": "inline",
+   "kind": "uri",
+   "count": 10,
+   "updated": 1792040892,
+   "solo_token": "rvbOVCc-QpwexJOuTAn4tCt5iUFWDNkV",
+   "no_dedup": false,
+   "flags": true,
+   "ip_filter": "v4"
+  }
+ },
+ "subs": {
+  "liangxin": {
+   "name": "liangxin",
+   "type": "url",
+   "url": "https://liangxin.xyz/api/v1/liangxin?OwO=9faaaef9abebca47a2bd7ccf8495a2a7",
+   "nodes": "",
+   "no_dedup": false,
+   "flags": true,
+   "ip_filter": "v4"
+  },
+  "1": {
+   "name": "1",
+   "type": "url",
+   "url": "https://xn--9kqs1lo79d.cc/api/v1/chuixue?token=a3ca0ee29e9c38aee3bc6c8064b83e23",
+   "nodes": "",
+   "no_dedup": false,
+   "flags": true,
+   "ip_filter": "v4"
+  },
+  "2": {
+   "name": "2",
+   "type": "inline",
+   "url": "",
+   "nodes": "anytls://0324fbc29561@654968169.df6h451rh.xin:443?security=tls&sni=images.ctfassets.net&alpn=http%2F1.1&insecure=1&fp=chrome#%E9%A6%99%E6%B8%AF1\nanytls://0324fbc29561@98416548.df6h451rh.xin:443?security=tls&sni=images.ctfassets.net&alpn=http%2F1.1&insecure=1&fp=chrome#%E5%8F%B0%E6%B9%BE1\nanytls://0324fbc29561@er8u54dh.df6h451rh.xin:443?security=tls&sni=px.ads.linkedin.com&alpn=http%2F1.1&insecure=1&fp=chrome#%E5%8F%B0%E6%B9%BE2\nanytls://0324fbc29561@56481.df6h451rh.xin:443?security=tls&sni=images.ctfassets.net&alpn=http%2F1.1&insecure=1&fp=chrome#%E9%A6%99%E6%B8%AF2\nanytls://0324fbc29561@98416548.df6h451rh.xin:443?security=tls&sni=images.ctfassets.net&alpn=http%2F1.1&insecure=1&fp=chrome#%E5%8F%B0%E6%B9%BE3\nvmess://eyJhZGQiOiJmdWpyZHQuZDZmNTRoZDFqLmNjIiwiYWlkIjoiMCIsImFscG4iOiIiLCJmcCI6ImNocm9tZSIsImhvc3QiOiJmdWpyZHQuZDZmNTRoZDFqLmNjIiwiaWQiOiJkODc3ZGM2Zi03MzIzLTRiNDctYTdkZC0xNDIyOGNiYWU4NTQiLCJpbnNlY3VyZSI6IjEiLCJuZXQiOiJ3cyIsInBhdGgiOiIvIiwicG9ydCI6IjQ0MyIsInBzIjoi5Y+w5rm+NCIsInNjeSI6ImF1dG8iLCJzbmkiOiJmdWpyZHQuZDZmNTRoZDFqLmNjIiwidGxzIjoidGxzIiwidHlwZSI6Im5vbmUiLCJ2IjoiMiJ9\nvmess://eyJhZGQiOiJmdWpyZHQuZDZmNTRoZDFqLmNjIiwiYWlkIjoiMCIsImFscG4iOiIiLCJmcCI6ImNocm9tZSIsImhvc3QiOiJmdWpyZHQuZDZmNTRoZDFqLmNjIiwiaWQiOiJkODc3ZGM2Zi03MzIzLTRiNDctYTdkZC0xNDIyOGNiYWU4NTQiLCJpbnNlY3VyZSI6IjEiLCJuZXQiOiJ3cyIsInBhdGgiOiIvIiwicG9ydCI6IjQ0MyIsInBzIjoi5Y+w5rm+NSIsInNjeSI6ImF1dG8iLCJzbmkiOiJmdWpyZHQuZDZmNTRoZDFqLmNjIiwidGxzIjoidGxzIiwidHlwZSI6Im5vbmUiLCJ2IjoiMiJ9\nanytls://0324fbc29561@654968169.df6h451rh.xin:443?security=tls&sni=images.ctfassets.net&fp=chrome&alpn=http%2F1.1&insecure=1&allowInsecure=1&type=tcp&headerType=none&pcs=BC4605E7163B5E0339E15E8EE6E22615EF3AB1C51B5544CE4C2E679EBD820B7D#%E9%A6%99%E6%B8%AF3\nanytls://0324fbc29561@98416548.df6h451rh.xin:443?security=tls&sni=images.ctfassets.net&fp=chrome&alpn=http%2F1.1&insecure=1&allowInsecure=1&type=tcp&headerType=none&pcs=23AAF84520D01981420AA024E8264921BA0546A1385D0F4211644DE4DD278B1D#%E5%8F%B0%E6%B9%BE6\nanytls://0324fbc29561@684616s4.df6h451rh.xin:443?security=tls&sni=px.ads.linkedin.com&fp=chrome&alpn=http%2F1.1&insecure=1&allowInsecure=1&type=tcp&headerType=none&pcs=48ED2204B341D33777B79635C70FD96703FD0EEFD87770104DEA1117F7C65BBC#%E5%8F%B0%E6%B9%BE7",
+   "no_dedup": false,
+   "flags": true,
+   "ip_filter": "v4"
+  }
+ },
+ "bundles": {
+  "默认组合": {
+   "subs": [
+    "1"
+   ],
+   "no_dedup": true,
+   "flags": false,
+   "ip_filter": "all",
+   "token": "HPsO4v2SqmUQNpNG3rwikceE-qk5IP89",
+   "link": "https://subman-web.vercel.app/s/HPsO4v2SqmUQNpNG3rwikceE-qk5IP89",
+   "count": 25,
+   "unknown": 0,
+   "regions": "",
+   "updated": 1792041096
+  }
+ },
+ "all_subs": [
+  "1",
+  "2",
+  "liangxin"
+ ]
+}
