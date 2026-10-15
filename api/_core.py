@@ -82,7 +82,10 @@ def new_token():
 
 
 def unique_token(store):
-    seen = {store["bundle"].get("token")}
+    seen = set()
+    for b in store.get("bundles", {}).values():
+        if b.get("token"):
+            seen.add(b["token"])
     seen.update(s.get("solo_token") for s in store["subs"].values()
                 if s.get("solo_token"))
     while True:
@@ -102,22 +105,47 @@ def ensure_solo_token(store, name):
 
 
 def find_by_token(store, token):
-    """公开链接 token 查找: 返回 (kind, name), kind 为 bundle/solo, 找不到返回 None。"""
+    """公开链接 token 查找: 返回 (kind, name, cfg),
+    kind 为 bundle/solo, cfg 为发布配置(单独链接用 solo_defaults)。"""
     if not token:
         return None
-    if token == store["bundle"].get("token"):
-        return ("bundle", None)
+    for bname, b in store.get("bundles", {}).items():
+        if b.get("token") == token:
+            return ("bundle", bname, b)
     for name, s in store["subs"].items():
         if s.get("solo_token") == token:
-            return ("solo", name)
+            return ("solo", name, store.get("solo_defaults", {}))
     return None
 
 
+def default_bundle_cfg():
+    return {"token": new_token(), "subs": [], "no_dedup": False,
+            "flags": True, "ip_filter": "all", "updated": None}
+
+
 def default_store():
-    return {"subs": {},
-            "bundle": {"token": new_token(), "subs": [],
-                       "no_dedup": False, "flags": True, "ip_filter": "all",
-                       "updated": None}}
+    return {"subs": {}, "bundles": {},
+            "solo_defaults": {"no_dedup": False, "flags": True,
+                              "ip_filter": "all"}}
+
+
+def _migrate(s):
+    """老数据迁移: 单 bundle -> bundles['默认组合'], 发布配置 -> solo_defaults。"""
+    if "bundle" in s and "bundles" not in s:
+        old = s.pop("bundle") or {}
+        s["bundles"] = {"默认组合": {
+            "token": old.get("token") or new_token(),
+            "subs": old.get("subs") or [],
+            "no_dedup": bool(old.get("no_dedup")),
+            "flags": old.get("flags", True),
+            "ip_filter": old.get("ip_filter", "all"),
+            "updated": old.get("updated")}}
+        s["solo_defaults"] = {
+            "no_dedup": bool(old.get("no_dedup")),
+            "flags": old.get("flags", True),
+            "ip_filter": old.get("ip_filter", "all")}
+        return True
+    return False
 
 
 def load_store():
@@ -125,8 +153,13 @@ def load_store():
     if raw:
         try:
             s = json.loads(raw)
+            migrated = _migrate(s)
             s.setdefault("subs", {})
-            s.setdefault("bundle", default_store()["bundle"])
+            s.setdefault("bundles", {})
+            s.setdefault("solo_defaults",
+                         {"no_dedup": False, "flags": True, "ip_filter": "all"})
+            if migrated:
+                save_store(s)
             return s
         except Exception:
             pass
@@ -235,9 +268,91 @@ def remove_sub(store, name):
         return f"没有名为 {name} 的订阅"
     del store["subs"][name]
     kv_del(cache_key(name))
-    b = store["bundle"]
-    if name in b["subs"]:
-        b["subs"] = [n for n in b["subs"] if n != name]
+    for b in store.get("bundles", {}).values():
+        if name in b.get("subs", []):
+            b["subs"] = [n for n in b["subs"] if n != name]
+    return None
+
+
+def valid_bundle_name(name):
+    name = (name or "").strip()
+    if not name or len(name) > 64:
+        return False
+    return not any(c in name for c in "/\\\n\r")
+
+
+def add_bundle(store, name):
+    name = (name or "").strip()
+    if not valid_bundle_name(name):
+        return "组合名 1-64 个字符, 不能含 / 或换行"
+    if name in store["bundles"]:
+        return f"已存在名为 {name} 的组合"
+    d = store.get("solo_defaults", {})
+    store["bundles"][name] = {
+        "token": unique_token(store), "subs": [],
+        "no_dedup": d.get("no_dedup", False),
+        "flags": d.get("flags", True),
+        "ip_filter": d.get("ip_filter", "all"),
+        "updated": None}
+    return None
+
+
+def update_bundle(store, name, subs, no_dedup, flags, ip_filter):
+    b = store["bundles"].get(name)
+    if not b:
+        return "没有这个组合"
+    b["subs"] = [n for n in (subs or []) if n in store["subs"]]
+    b["no_dedup"] = bool(no_dedup)
+    b["flags"] = bool(flags)
+    b["ip_filter"] = ip_filter if ip_filter in ("all", "v4", "v6") else "all"
+    b["updated"] = _now()
+    return None
+
+
+def remove_bundle(store, name):
+    if name not in store["bundles"]:
+        return "没有这个组合"
+    del store["bundles"][name]
+    return None
+
+
+def regen_bundle_token(store, name):
+    b = store["bundles"].get(name)
+    if not b:
+        return "没有这个组合"
+    b["token"] = unique_token(store)
+    b["updated"] = _now()
+    return None
+
+
+def edit_url_sub(store, name, url):
+    sub = store["subs"].get(name)
+    if not sub:
+        return "没有这个订阅"
+    if sub["type"] != "url":
+        return f"{name} 不是远程订阅, 不能改链接"
+    if not re.match(r"^https?://", url or "", re.I):
+        return "URL 须以 http(s):// 开头"
+    sub["url"] = url
+    sub["kind"] = "uri"
+    sub["count"] = None
+    kv_del(cache_key(name))
+    return None
+
+
+def edit_inline_sub(store, name, text):
+    sub = store["subs"].get(name)
+    if not sub:
+        return "没有这个订阅"
+    if sub["type"] != "inline":
+        return f"{name} 不是粘贴订阅, 不能改节点"
+    lines = [l.strip() for l in (text or "").splitlines()
+             if l.strip() and "://" in l]
+    if not lines:
+        return "没有读到节点链接"
+    sub["nodes"] = lines
+    sub["count"] = len(lines)
+    sub["added"] = _now()
     return None
 
 
@@ -464,14 +579,14 @@ def filter_by_ip_family(nodes, family):
 
 # ---------- 合成订阅 ----------
 
-def build_bundle(store, allow_live_fetch=True, only=None):
+def build_bundle(store, cfg, allow_live_fetch=True, only=None):
     """返回 (base64文本, 节点数, 无法解析行数, [(订阅名, 行数, 备注)], [地区代码]).
-    only 指定订阅名时只发布该订阅(单独链接), 否则按发布配置合并。"""
-    b = store["bundle"]
+    cfg 为发布配置 {subs, no_dedup, flags, ip_filter};
+    only 指定订阅名时只发布该订阅(单独链接)。"""
     if only:
         names = [only] if only in store["subs"] else []
     else:
-        names = b["subs"] or sorted(store["subs"].keys())
+        names = cfg.get("subs") or sorted(store["subs"].keys())
     chunks, info = [], []
     for name in names:
         sub = store["subs"].get(name)
@@ -501,12 +616,12 @@ def build_bundle(store, allow_live_fetch=True, only=None):
         chunks.append("\n".join(ls))
         info.append((name, len(ls), None))
     text = "\n".join(chunks)
-    nodes, unknown = ap.parse_subscription(text, dedup=not b["no_dedup"])
-    ipf = b.get("ip_filter", "all")
+    nodes, unknown = ap.parse_subscription(text, dedup=not cfg.get("no_dedup"))
+    ipf = cfg.get("ip_filter", "all")
     if ipf in ("v4", "v6") and nodes:
         nodes = filter_by_ip_family(nodes, ipf)
     regions = set()
-    if b.get("flags", True) and nodes:
+    if cfg.get("flags", True) and nodes:
         regions = enrich_flags(nodes)
     out = base64.b64encode(
         ("\n".join(n["raw"] for n in nodes) + "\n").encode("utf-8")).decode()

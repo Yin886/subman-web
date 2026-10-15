@@ -30,7 +30,20 @@ class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if not self._auth():
             return
+        qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        name = (qs.get("name") or [""])[0]
         store = core.load_store()
+        if name:
+            sub = store["subs"].get(name)
+            if not sub:
+                hh.send_json(self, 404, {"ok": False, "error": "没有这个订阅"})
+                return
+            hh.send_json(self, 200, {"ok": True,
+                                    "sub": {"name": name, "type": sub["type"],
+                                            "url": sub.get("url", ""),
+                                            "nodes": "\n".join(
+                                                sub.get("nodes", []))}})
+            return
         summary = _summary(store)
         core.save_store(store)  # 补上老订阅缺失的 solo_token
         hh.send_json(self, 200, {"ok": True, "subs": summary})
@@ -60,6 +73,23 @@ class handler(BaseHTTPRequestHandler):
                 hh.send_json(self, 404, {"ok": False, "error": "没有这个订阅"})
                 return
             store["subs"][name]["solo_token"] = core.unique_token(store)
+            core.save_store(store)
+            hh.send_json(self, 200, {"ok": True, "subs": _summary(store)})
+            return
+        if action == "edit":
+            body = hh.read_json(self)
+            name = body.get("name", "")
+            sub = store["subs"].get(name)
+            if not sub:
+                hh.send_json(self, 404, {"ok": False, "error": "没有这个订阅"})
+                return
+            if sub["type"] == "url":
+                err = core.edit_url_sub(store, name, body.get("url", ""))
+            else:
+                err = core.edit_inline_sub(store, name, body.get("nodes", ""))
+            if err:
+                hh.send_json(self, 400, {"ok": False, "error": err})
+                return
             core.save_store(store)
             hh.send_json(self, 200, {"ok": True, "subs": _summary(store)})
             return

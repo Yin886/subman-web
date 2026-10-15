@@ -18,10 +18,10 @@ class handler(BaseHTTPRequestHandler):
         if not found:
             hh.send_text(self, 404, "not found")
             return
-        kind, name = found
+        kind, name, cfg = found
         try:
             out, _count, _un, _info, _regions = core.build_bundle(
-                store, allow_live_fetch=True,
+                store, cfg, allow_live_fetch=True,
                 only=name if kind == "solo" else None)
         except Exception as e:
             hh.send_text(self, 500, f"生成订阅失败: {e}")

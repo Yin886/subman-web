@@ -8,16 +8,20 @@
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;background:#f4f5f7;color:#222;padding:16px;max-width:860px;margin:0 auto}
 h1{font-size:20px;margin:8px 0 16px}
+h2.sec{font-size:17px;margin:20px 0 12px;padding-left:4px}
 .card{background:#fff;border-radius:12px;padding:16px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
 .card h2{font-size:16px;margin-bottom:12px}
+.card h2 .sp{flex:1}
+.card h2.rowh{display:flex;align-items:center;gap:8px}
 table{width:100%;border-collapse:collapse;font-size:14px}
 th,td{text-align:left;padding:8px 6px;border-bottom:1px solid #eee}
 th{color:#888;font-weight:500;font-size:13px}
 .badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:12px;background:#eef2ff;color:#3b5bdb}
 .badge.url{background:#e6fcf5;color:#0c8599}
-.row{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.row{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center}
 input[type=text],textarea{flex:1;min-width:0;border:1px solid #ddd;border-radius:8px;padding:10px;font-size:14px}
 textarea{min-height:110px;font-family:monospace;resize:vertical}
+select{border:1px solid #ddd;border-radius:8px;padding:10px;font-size:14px}
 button{border:none;border-radius:8px;padding:10px 16px;font-size:14px;cursor:pointer;background:#3b5bdb;color:#fff}
 button.ghost{background:#f1f3f5;color:#333}
 button.danger{background:#fa5252}
@@ -33,12 +37,24 @@ label.f{display:block;font-size:13px;color:#666;margin:8px 0 4px}
 <body>
 <h1>🛰️ 订阅管理</h1>
 
+<h2 class="sec">📦 单个订阅</h2>
+
 <div class="card">
   <h2>订阅列表</h2>
   <div id="subs"><p class="muted">加载中…</p></div>
   <div class="row" style="margin-top:10px">
     <button class="ghost small" onclick="fetchSubs()">🔄 更新全部远程订阅</button>
   </div>
+</div>
+
+<div class="card" id="edit_card" style="display:none">
+  <h2>✏️ 编辑订阅 <span id="edit_title"></span></h2>
+  <div id="edit_body"></div>
+  <div class="row" style="margin-top:10px">
+    <button onclick="saveEdit()">💾 保存</button>
+    <button class="ghost" onclick="cancelEdit()">取消</button>
+  </div>
+  <p class="muted" id="edit_hint"></p>
 </div>
 
 <div class="card">
@@ -67,30 +83,18 @@ label.f{display:block;font-size:13px;color:#666;margin:8px 0 4px}
   <div class="row" style="margin-top:10px"><button onclick="addInline()">保存</button></div>
 </div>
 
+<h2 class="sec">🧩 组合订阅</h2>
+
 <div class="card">
-  <h2>发布</h2>
-  <div id="bundle_subs" class="row"></div>
+  <h2>新建组合</h2>
   <div class="row">
-    <label class="chk"><input type="checkbox" id="no_dedup"> 保留重复节点(不去重)</label>
-    <label class="chk"><input type="checkbox" id="flags" checked> 节点名称加上地区旗帜</label>
+    <input type="text" id="nb_name" placeholder="组合名, 如 香港组">
+    <button onclick="addBundle()">新建</button>
   </div>
-  <div class="row" style="align-items:center">
-    <label class="f" style="margin:0;white-space:nowrap">IP 筛选</label>
-    <select id="ip_filter" style="border:1px solid #ddd;border-radius:8px;padding:10px;font-size:14px">
-      <option value="all">全部</option>
-      <option value="v4">仅 IPv4</option>
-      <option value="v6">仅 IPv6</option>
-    </select>
-  </div>
-  <div class="row"><button onclick="saveBundle()">💾 保存发布设置</button></div>
-  <div id="bundle_info" class="muted"></div>
-  <div class="linkbox"><span id="pub_link" style="flex:1">—</span></div>
-  <div class="row">
-    <button class="small" onclick="copyLink()">📋 复制链接</button>
-    <button class="ghost small" onclick="regenToken()">🔀 换新链接</button>
-  </div>
-  <p class="muted">把链接加到 Egern 等客户端当订阅用。链接本身即权限, 换新后旧链接失效。</p>
+  <p class="muted">每个组合自己勾选订阅、各自有独立链接和配置, 互不影响。</p>
 </div>
+
+<div id="bundles"><p class="muted">加载中…</p></div>
 
 <div class="card">
   <h2>后台账号</h2>
@@ -117,7 +121,9 @@ function toast(s){ const t=document.getElementById('toast'); t.textContent=s; t.
   clearTimeout(t._h); t._h=setTimeout(()=>t.style.display='none',2200); }
 function fmt(ts){ if(!ts) return '-'; const d=new Date(ts*1000);
   return (d.getMonth()+1)+'-'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
+/* ---------- 单个订阅 ---------- */
 async function loadSubs(){
   const j = await api('/api/subs');
   const box = document.getElementById('subs');
@@ -125,12 +131,12 @@ async function loadSubs(){
   if(!names.length){ box.innerHTML='<p class="muted">还没有订阅</p>'; return; }
   let h = '<table><tr><th>名称</th><th>类型</th><th>节点</th><th>更新</th><th>操作</th></tr>';
   for(const n of names){ const s=j.subs[n];
-    h += '<tr><td>'+n+'</td><td><span class="badge'+(s.type==='url'?' url':'')+'">'+(s.type==='url'?'远程':'内联')+'</span></td>'
+    h += '<tr><td>'+esc(n)+'</td><td><span class="badge'+(s.type==='url'?' url':'')+'">'+(s.type==='url'?'远程':'内联')+'</span></td>'
       + '<td>'+(s.count==null?'-':s.count)+'</td><td>'+fmt(s.updated)+'</td>'
-      + '<td><button class="ghost small" onclick="copySoloLink(\''+n+'\',\''+s.solo_token+'\')">🔗 单独链接</button> '
-      + '<button class="ghost small" onclick="regenSoloToken(\''+n+'\')">换新</button> '
-      + '<button class="ghost small" onclick="fetchOne(\''+n+'\')">更新</button> '
-      + '<button class="danger small" onclick="delSub(\''+n+'\')">删</button></td></tr>';
+      + '<td><button class="ghost small" onclick="copySoloLink(\''+esc(n)+'\',\''+s.solo_token+'\')">🔗 单独链接</button> '
+      + '<button class="ghost small" onclick="editSub(\''+esc(n)+'\')">✏️ 编辑</button> '
+      + '<button class="ghost small" onclick="fetchOne(\''+esc(n)+'\')">更新</button> '
+      + '<button class="danger small" onclick="delSub(\''+esc(n)+'\')">删</button></td></tr>';
   }
   box.innerHTML = h+'</table>';
 }
@@ -140,11 +146,40 @@ function copySoloLink(n, token){
     .then(()=>toast('已复制 '+n+' 的单独链接'))
     .catch(()=>{ prompt('复制 '+n+' 的单独链接:', soloLink(token)); });
 }
-async function regenSoloToken(n){
-  if(!confirm('换新 '+n+' 的单独链接? 旧链接立即失效')) return;
-  const j = await api('/api/subs?action=solo_token','POST',{name:n});
+let editingSub = null, editingType = null;
+async function editSub(n){
+  const j = await api('/api/subs?name='+encodeURIComponent(n));
+  if(!j.ok){ toast(j.error||'读取失败'); return; }
+  editingSub = n; editingType = j.sub.type;
+  document.getElementById('edit_title').textContent = n;
+  const body = document.getElementById('edit_body');
+  if(j.sub.type==='url'){
+    body.innerHTML = '<label class="f">订阅链接</label><div class="row"><input type="text" id="edit_url" value="'+esc(j.sub.url)+'"></div>';
+    document.getElementById('edit_hint').textContent = '保存后点"更新"重新拉取。';
+  }else{
+    body.innerHTML = '<label class="f">节点链接, 每行一条</label><textarea id="edit_nodes">'+esc(j.sub.nodes)+'</textarea>';
+    document.getElementById('edit_hint').textContent = '保存后直接生效。';
+  }
+  document.getElementById('edit_card').style.display = 'block';
+  document.getElementById('edit_card').scrollIntoView({behavior:'smooth', block:'center'});
+}
+function cancelEdit(){
+  editingSub = null;
+  document.getElementById('edit_card').style.display = 'none';
+}
+async function saveEdit(){
+  if(!editingSub) return;
+  const payload = {name: editingSub};
+  if(editingType==='url'){
+    payload.url = document.getElementById('edit_url').value.trim();
+    if(!payload.url){ toast('链接不能为空'); return; }
+  }else{
+    payload.nodes = document.getElementById('edit_nodes').value;
+    if(!payload.nodes.trim()){ toast('节点不能为空'); return; }
+  }
+  const j = await api('/api/subs?action=edit','POST',payload);
   if(!j.ok){ toast(j.error); return; }
-  toast('已换新'); loadSubs();
+  cancelEdit(); toast('已保存'); loadSubs(); loadBundles();
 }
 async function addUrl(){
   const name=document.getElementById('url_name').value.trim(), url=document.getElementById('url_url').value.trim();
@@ -152,9 +187,9 @@ async function addUrl(){
   const j = await api('/api/subs','POST',{name,type:'url',url});
   if(!j.ok){ toast(j.error); return; }
   document.getElementById('url_name').value=''; document.getElementById('url_url').value='';
-  toast('已添加, 正在拉取…'); loadSubs(); loadBundle();
+  toast('已添加, 正在拉取…'); loadSubs(); loadBundles();
   const f = await api('/api/subs?action=fetch','POST',{name});
-  toast(f.results[0].msg); loadSubs(); loadBundle();
+  toast(f.results[0].msg); loadSubs(); loadBundles();
 }
 async function addInline(){
   const name=document.getElementById('in_name').value.trim(), nodes=document.getElementById('in_nodes').value;
@@ -166,64 +201,100 @@ async function addInline(){
   if(!j.ok){ toast(j.error); return; }
   document.getElementById('in_name').value=''; document.getElementById('in_nodes').value='';
   document.getElementById('in_prefix').value='';
-  toast('已保存'); loadSubs(); loadBundle();
+  toast('已保存'); loadSubs(); loadBundles();
 }
 async function delSub(n){
-  if(!confirm('删除订阅 '+n+' ?')) return;
+  if(!confirm('删除订阅 '+n+' ? 相关组合里的勾选也会一并移除')) return;
   const j = await api('/api/subs?name='+encodeURIComponent(n),'DELETE');
   if(!j.ok){ toast(j.error); return; }
-  toast('已删除'); loadSubs(); loadBundle();
+  toast('已删除'); loadSubs(); loadBundles();
 }
 async function fetchOne(n){
   toast('拉取中…');
   const j = await api('/api/subs?action=fetch','POST',{name:n});
-  toast(j.results[0].msg); loadSubs(); loadBundle();
+  toast(j.results[0].msg); loadSubs(); loadBundles();
 }
 async function fetchSubs(){
   toast('拉取中…');
   const j = await api('/api/subs?action=fetch','POST',{});
   const bad = j.results.filter(r=>!r.ok);
   toast(bad.length ? bad.map(r=>r.msg).join('; ') : '全部更新完成');
-  loadSubs(); loadBundle();
+  loadSubs(); loadBundles();
 }
-async function loadBundle(){
-  const j = await api('/api/bundle');
-  if(!j.ok){ toast('发布信息加载失败'); return; }
-  const box = document.getElementById('bundle_subs');
-  box.innerHTML = j.all_subs.map(n=>{
-    const on = !j.bundle.subs.length || j.bundle.subs.includes(n);
-    return '<label class="chk"><input type="checkbox" data-sub="'+n+'" '+(on?'checked':'')+'> '+n+'</label>';
-  }).join('') || '<p class="muted">暂无订阅</p>';
-  document.getElementById('no_dedup').checked = !!j.bundle.no_dedup;
-  document.getElementById('flags').checked = j.bundle.flags !== false;
-  document.getElementById('ip_filter').value = j.bundle.ip_filter || 'all';
-  document.getElementById('pub_link').textContent = j.link || '—';
-  document.getElementById('bundle_info').textContent =
-    '当前合并 '+j.count+' 个节点'+(j.unknown?' (无法解析 '+j.unknown+' 行)':'')
-    + (j.regions ? ' 覆盖地区 '+j.regions : '')
-    + (j.bundle.updated ? ', 设置更新于 '+fmt(j.bundle.updated) : '');
+
+/* ---------- 组合订阅 ---------- */
+let bundleNames = [];
+async function loadBundles(){
+  const j = await api('/api/bundles');
+  if(!j.ok){ toast('组合信息加载失败'); return; }
+  bundleNames = Object.keys(j.bundles);
+  const box = document.getElementById('bundles');
+  if(!bundleNames.length){ box.innerHTML = '<p class="muted">还没有组合, 在上面新建一个吧</p>'; return; }
+  box.innerHTML = bundleNames.map((bn, i)=>{
+    const b = j.bundles[bn];
+    const subs = j.all_subs.map(n=>{
+      const on = !b.subs.length || b.subs.includes(n);
+      return '<label class="chk"><input type="checkbox" data-bsub="'+i+'" value="'+esc(n)+'" '+(on?'checked':'')+'> '+esc(n)+'</label>';
+    }).join('') || '<p class="muted">暂无订阅</p>';
+    return '<div class="card" data-bi="'+i+'">'
+      + '<h2 class="rowh">🧩 '+esc(bn)+'<span class="sp"></span>'
+      + '<button class="danger small" onclick="delBundle('+i+')">删除组合</button></h2>'
+      + '<label class="f">包含订阅</label><div class="row">'+subs+'</div>'
+      + '<div class="row">'
+      + '<label class="chk"><input type="checkbox" data-bnd="'+i+'" '+(b.no_dedup?'checked':'')+'> 保留重复节点(不去重)</label>'
+      + '<label class="chk"><input type="checkbox" data-bfl="'+i+'" '+(b.flags!==false?'checked':'')+'> 节点名称加上地区旗帜</label>'
+      + '<label class="chk">IP 筛选 <select data-bip="'+i+'">'
+      + '<option value="all"'+(b.ip_filter==='all'?' selected':'')+'>全部</option>'
+      + '<option value="v4"'+(b.ip_filter==='v4'?' selected':'')+'>仅 IPv4</option>'
+      + '<option value="v6"'+(b.ip_filter==='v6'?' selected':'')+'>仅 IPv6</option>'
+      + '</select></label></div>'
+      + '<div class="row"><button onclick="saveBundle('+i+')">💾 保存组合设置</button></div>'
+      + '<div class="muted">当前合并 '+b.count+' 个节点'+(b.unknown?' (无法解析 '+b.unknown+' 行)':'')
+      + (b.regions ? ' 覆盖地区 '+b.regions : '')
+      + (b.updated ? ', 设置更新于 '+fmt(b.updated) : '')+'</div>'
+      + '<div class="linkbox"><span style="flex:1">'+esc(b.link||'—')+'</span></div>'
+      + '<div class="row"><button class="small" onclick="copyBundleLink('+i+')">📋 复制链接</button>'
+      + '<button class="ghost small" onclick="regenBundleToken('+i+')">🔀 换新链接</button></div>'
+      + '</div>';
+  }).join('');
 }
-async function saveBundle(){
-  const subs = [...document.querySelectorAll('#bundle_subs input[data-sub]:checked')].map(e=>e.dataset.sub);
-  const j = await api('/api/bundle','POST',{subs,
-    no_dedup:document.getElementById('no_dedup').checked,
-    flags:document.getElementById('flags').checked,
-    ip_filter:document.getElementById('ip_filter').value});
+function bcard(i){ return document.querySelector('[data-bi="'+i+'"]'); }
+async function addBundle(){
+  const name = document.getElementById('nb_name').value.trim();
+  if(!name){ toast('组合名不能为空'); return; }
+  const j = await api('/api/bundles?action=create','POST',{name});
   if(!j.ok){ toast(j.error); return; }
-  toast('已保存'); loadBundle();
+  document.getElementById('nb_name').value = '';
+  toast('已新建组合'); loadBundles();
 }
-async function regenToken(){
-  if(!confirm('换新链接后旧链接立即失效, 继续?')) return;
-  const j = await api('/api/bundle?action=token','POST',{});
-  if(!j.ok){ toast('失败'); return; }
-  document.getElementById('pub_link').textContent = j.link;
-  toast('已换新链接');
+async function saveBundle(i){
+  const card = bcard(i);
+  const subs = [...card.querySelectorAll('input[data-bsub]:checked')].map(e=>e.value);
+  const j = await api('/api/bundles?action=update','POST',{name: bundleNames[i], subs,
+    no_dedup: card.querySelector('input[data-bnd]').checked,
+    flags: card.querySelector('input[data-bfl]').checked,
+    ip_filter: card.querySelector('select[data-bip]').value});
+  if(!j.ok){ toast(j.error); return; }
+  toast('已保存'); loadBundles();
 }
-function copyLink(){
-  const t = document.getElementById('pub_link').textContent;
+async function delBundle(i){
+  if(!confirm('删除组合 '+bundleNames[i]+' ? 它的发布链接将失效')) return;
+  const j = await api('/api/bundles?action=delete','POST',{name: bundleNames[i]});
+  if(!j.ok){ toast(j.error); return; }
+  toast('已删除'); loadBundles();
+}
+async function regenBundleToken(i){
+  if(!confirm('换新 '+bundleNames[i]+' 的链接? 旧链接立即失效')) return;
+  const j = await api('/api/bundles?action=token','POST',{name: bundleNames[i]});
+  if(!j.ok){ toast(j.error); return; }
+  toast('已换新链接'); loadBundles();
+}
+function copyBundleLink(i){
+  const t = bcard(i).querySelector('.linkbox span').textContent;
   if(!t || t==='—'){ toast('没有链接'); return; }
   navigator.clipboard.writeText(t).then(()=>toast('已复制')).catch(()=>toast('复制失败, 长按手动复制'));
 }
+
 async function changePasswd(){
   const user=document.getElementById('adm_user').value.trim();
   const pw=document.getElementById('adm_pass').value, pw2=document.getElementById('adm_pass2').value;
@@ -237,7 +308,7 @@ async function changePasswd(){
   document.getElementById('adm_pass2').value='';
   toast('已修改, 下次用新账号密码登录');
 }
-loadSubs(); loadBundle();
+loadSubs(); loadBundles();
 </script>
 </body>
 </html>
