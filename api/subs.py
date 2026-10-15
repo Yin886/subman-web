@@ -12,9 +12,11 @@ import _http as hh  # noqa: E402
 def _summary(store):
     out = {}
     for name, s in store["subs"].items():
+        core.ensure_solo_token(store, name)
         out[name] = {"type": s["type"], "kind": s.get("kind", "uri"),
                      "count": s.get("count"),
-                     "updated": s.get("fetched") or s.get("added")}
+                     "updated": s.get("fetched") or s.get("added"),
+                     "solo_token": s.get("solo_token")}
     return out
 
 
@@ -28,7 +30,10 @@ class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if not self._auth():
             return
-        hh.send_json(self, 200, {"ok": True, "subs": _summary(core.load_store())})
+        store = core.load_store()
+        summary = _summary(store)
+        core.save_store(store)  # 补上老订阅缺失的 solo_token
+        hh.send_json(self, 200, {"ok": True, "subs": summary})
 
     def do_POST(self):
         if not self._auth():
@@ -47,6 +52,16 @@ class handler(BaseHTTPRequestHandler):
             core.save_store(store)
             hh.send_json(self, 200, {"ok": True, "results": results,
                                     "subs": _summary(store)})
+            return
+        if action == "solo_token":
+            body = hh.read_json(self)
+            name = body.get("name", "")
+            if name not in store["subs"]:
+                hh.send_json(self, 404, {"ok": False, "error": "没有这个订阅"})
+                return
+            store["subs"][name]["solo_token"] = core.unique_token(store)
+            core.save_store(store)
+            hh.send_json(self, 200, {"ok": True, "subs": _summary(store)})
             return
         body = hh.read_json(self)
         name, typ = body.get("name", ""), body.get("type", "")

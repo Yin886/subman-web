@@ -46,7 +46,7 @@ class handler(BaseHTTPRequestHandler):
         action = (qs.get("action") or [""])[0]
         store = core.load_store()
         if action == "token":
-            store["bundle"]["token"] = core.new_token()
+            store["bundle"]["token"] = core.unique_token(store)
             store["bundle"]["updated"] = core._now()
             core.save_store(store)
             hh.send_json(self, 200, {"ok": True, **self._bundle_info(store)})

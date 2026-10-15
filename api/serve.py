@@ -14,12 +14,15 @@ class handler(BaseHTTPRequestHandler):
         qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         token = (qs.get("token") or [""])[0]
         store = core.load_store()
-        if not token or token != store["bundle"]["token"]:
+        found = core.find_by_token(store, token)
+        if not found:
             hh.send_text(self, 404, "not found")
             return
+        kind, name = found
         try:
             out, _count, _un, _info, _regions = core.build_bundle(
-                store, allow_live_fetch=True)
+                store, allow_live_fetch=True,
+                only=name if kind == "solo" else None)
         except Exception as e:
             hh.send_text(self, 500, f"生成订阅失败: {e}")
             return

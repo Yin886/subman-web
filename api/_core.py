@@ -81,6 +81,38 @@ def new_token():
     return secrets.token_urlsafe(24)
 
 
+def unique_token(store):
+    seen = {store["bundle"].get("token")}
+    seen.update(s.get("solo_token") for s in store["subs"].values()
+                if s.get("solo_token"))
+    while True:
+        t = new_token()
+        if t not in seen:
+            return t
+
+
+def ensure_solo_token(store, name):
+    """给订阅补独立发布 token(老数据迁移用), 返回 token。"""
+    sub = store["subs"].get(name)
+    if not sub:
+        return None
+    if not sub.get("solo_token"):
+        sub["solo_token"] = unique_token(store)
+    return sub["solo_token"]
+
+
+def find_by_token(store, token):
+    """公开链接 token 查找: 返回 (kind, name), kind 为 bundle/solo, 找不到返回 None。"""
+    if not token:
+        return None
+    if token == store["bundle"].get("token"):
+        return ("bundle", None)
+    for name, s in store["subs"].items():
+        if s.get("solo_token") == token:
+            return ("solo", name)
+    return None
+
+
 def default_store():
     return {"subs": {},
             "bundle": {"token": new_token(), "subs": [],
@@ -163,7 +195,8 @@ def add_url_sub(store, name, url):
         return "URL 须以 http(s):// 开头"
     now = _now()
     store["subs"][name] = {"type": "url", "url": url, "kind": "uri",
-                           "added": now, "fetched": None, "count": None}
+                           "added": now, "fetched": None, "count": None,
+                           "solo_token": unique_token(store)}
     return None
 
 
@@ -192,7 +225,8 @@ def add_inline_sub(store, name, text, rename_prefix="", rename_start=1,
         lines = auto_rename_nodes(store, lines)
     now = _now()
     store["subs"][name] = {"type": "inline", "nodes": lines,
-                           "added": now, "count": len(lines)}
+                           "added": now, "count": len(lines),
+                           "solo_token": unique_token(store)}
     return None
 
 
@@ -430,10 +464,14 @@ def filter_by_ip_family(nodes, family):
 
 # ---------- 合成订阅 ----------
 
-def build_bundle(store, allow_live_fetch=True):
-    """返回 (base64文本, 节点数, 无法解析行数, [(订阅名, 行数, 备注)], [地区代码])."""
+def build_bundle(store, allow_live_fetch=True, only=None):
+    """返回 (base64文本, 节点数, 无法解析行数, [(订阅名, 行数, 备注)], [地区代码]).
+    only 指定订阅名时只发布该订阅(单独链接), 否则按发布配置合并。"""
     b = store["bundle"]
-    names = b["subs"] or sorted(store["subs"].keys())
+    if only:
+        names = [only] if only in store["subs"] else []
+    else:
+        names = b["subs"] or sorted(store["subs"].keys())
     chunks, info = [], []
     for name in names:
         sub = store["subs"].get(name)
@@ -450,7 +488,7 @@ def build_bundle(store, allow_live_fetch=True):
         raw = kv_get(cache_key(name))
         if raw is None and allow_live_fetch:
             try:
-                raw, _ = ap.fetch_source(sub["url"])
+                raw, _ = ap.fetch_source(sub["url"], ua=FETCH_UA)
                 kv_set(cache_key(name), raw if raw.endswith("\n") else raw + "\n")
             except Exception as e:
                 info.append((name, 0, f"拉取失败: {e}"))
