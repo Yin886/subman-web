@@ -134,7 +134,8 @@ def _prefix_sub_name(lines, sub_name):
 def default_bundle_cfg():
     return {"token": new_token(), "subs": [], "no_dedup": False,
             "flags": True, "ip_filter": "all", "region_filter": "",
-            "sub_name_prefix": False, "updated": None}
+            "sub_name_prefix": False, "region_rename": False,
+            "updated": None}
 
 
 def default_store():
@@ -190,6 +191,9 @@ def _migrate(s):
             changed = True
         if "sub_name_prefix" not in _b:
             _b["sub_name_prefix"] = False
+            changed = True
+        if "region_rename" not in _b:
+            _b["region_rename"] = False
             changed = True
     for sub in s.get("subs", {}).values():
         for k, v in (("no_dedup", False), ("flags", True),
@@ -351,7 +355,8 @@ def add_bundle(store, name):
     store["bundles"][name] = {
         "token": unique_token(store), "subs": [],
         "no_dedup": False, "flags": True, "ip_filter": "all",
-        "region_filter": "", "sub_name_prefix": False, "updated": None}
+        "region_filter": "", "sub_name_prefix": False,
+        "region_rename": False, "updated": None}
     return None
 
 
@@ -377,7 +382,8 @@ def filter_by_region(nodes, region_filter):
 
 
 def update_bundle(store, name, subs, no_dedup, flags, ip_filter,
-                   region_filter="", sub_name_prefix=False):
+                   region_filter="", sub_name_prefix=False,
+                   region_rename=False):
     b = store["bundles"].get(name)
     if not b:
         return "没有这个组合"
@@ -387,6 +393,7 @@ def update_bundle(store, name, subs, no_dedup, flags, ip_filter,
     b["ip_filter"] = ip_filter if ip_filter in ("all", "v4", "v6") else "all"
     b["region_filter"] = (region_filter or "").strip()
     b["sub_name_prefix"] = bool(sub_name_prefix)
+    b["region_rename"] = bool(region_rename)
     b["updated"] = _now()
     return None
 
@@ -596,12 +603,15 @@ def _existing_counters(store, exclude=None):
     return counters
 
 
-def auto_rename_nodes(store, lines, exclude=None):
-    """按节点地区自动重命名: 香港1、香港2…美国1…。编号接着已有订阅的最大值。"""
+def auto_rename_nodes(store, lines, exclude=None, counters=None):
+    """按节点地区自动重命名: 香港1、香港2…美国1…。
+    counters 传入时跨多次调用共享编号(组合内统一编号);
+    不传时编号接着已有订阅的最大值。"""
     parsed = [(ln, ap.parse_full(ln)) for ln in lines]
     cc_map = _cc_map({n["host"].lower() for _, n in parsed
                       if n and n.get("host")})
-    counters = _existing_counters(store, exclude)
+    if counters is None:
+        counters = _existing_counters(store, exclude)
     out = []
     for ln, n in parsed:
         cc = cc_map.get((n.get("host") or "").lower()) if n else None
@@ -679,12 +689,16 @@ def build_bundle(store, cfg, allow_live_fetch=True, only=None):
     else:
         names = cfg.get("subs") or sorted(store["subs"].keys())
     chunks, info = [], []
+    # 组合按地区统一命名时, 编号在组合内全局连续(香港1…香港N, 日本1…日本M)
+    region_counters = {}
     for name in names:
         sub = store["subs"].get(name)
         if not sub:
             continue
         if sub["type"] == "inline":
             ls = sub["nodes"]
+            if cfg.get("region_rename") and ls:
+                ls = auto_rename_nodes(store, ls, counters=region_counters)
             if cfg.get("sub_name_prefix") and ls:
                 ls = _prefix_sub_name(ls, name)
             chunks.append("\n".join(ls))
@@ -706,6 +720,8 @@ def build_bundle(store, cfg, allow_live_fetch=True, only=None):
             continue
         norm = ap.normalize(raw)
         ls = [l for l in norm.splitlines() if l.strip()]
+        if cfg.get("region_rename") and ls:
+            ls = auto_rename_nodes(store, ls, counters=region_counters)
         if cfg.get("sub_name_prefix") and ls:
             ls = _prefix_sub_name(ls, name)
         chunks.append("\n".join(ls))
