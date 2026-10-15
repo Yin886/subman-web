@@ -120,7 +120,8 @@ def find_by_token(store, token):
 
 def default_bundle_cfg():
     return {"token": new_token(), "subs": [], "no_dedup": False,
-            "flags": True, "ip_filter": "all", "updated": None}
+            "flags": True, "ip_filter": "all", "region_filter": "",
+            "updated": None}
 
 
 def default_store():
@@ -184,6 +185,10 @@ def _migrate(s):
             sub.setdefault("flags", sd.get("flags", True))
             sub.setdefault("ip_filter", sd.get("ip_filter", "all"))
         changed = True
+    for _b in s.get("bundles", {}).values():
+        if "region_filter" not in _b:
+            _b["region_filter"] = ""
+            changed = True
     for sub in s.get("subs", {}).values():
         for k, v in (("no_dedup", False), ("flags", True),
                      ("ip_filter", "all"), ("rename_prefix", ""),
@@ -344,11 +349,33 @@ def add_bundle(store, name):
     store["bundles"][name] = {
         "token": unique_token(store), "subs": [],
         "no_dedup": False, "flags": True, "ip_filter": "all",
-        "updated": None}
+        "region_filter": "", "updated": None}
     return None
 
 
-def update_bundle(store, name, subs, no_dedup, flags, ip_filter):
+def _region_match(cc, rf):
+    """地区筛选匹配: rf 可为中文名(如 香港)或代码(如 HK)。"""
+    rf = (rf or "").strip()
+    if not rf or not cc:
+        return False
+    cc = cc.upper()
+    return rf.upper() == cc or COUNTRY_ZH.get(cc) == rf
+
+
+def filter_by_region(nodes, region_filter):
+    """只保留指定地区的节点；地区未知时保留(fail-open)。"""
+    rf = (region_filter or "").strip()
+    if not rf:
+        return nodes
+    hosts = {n["host"].lower() for n in nodes if n.get("host")}
+    cc_map = _cc_map(hosts) if hosts else {}
+    return [n for n in nodes
+            if not cc_map.get((n.get("host") or "").lower())
+            or _region_match(cc_map.get((n.get("host") or "").lower()), rf)]
+
+
+def update_bundle(store, name, subs, no_dedup, flags, ip_filter,
+                   region_filter=""):
     b = store["bundles"].get(name)
     if not b:
         return "没有这个组合"
@@ -356,6 +383,7 @@ def update_bundle(store, name, subs, no_dedup, flags, ip_filter):
     b["no_dedup"] = bool(no_dedup)
     b["flags"] = bool(flags)
     b["ip_filter"] = ip_filter if ip_filter in ("all", "v4", "v6") else "all"
+    b["region_filter"] = (region_filter or "").strip()
     b["updated"] = _now()
     return None
 
@@ -682,6 +710,9 @@ def build_bundle(store, cfg, allow_live_fetch=True, only=None):
         info.append((name, len(ls), None))
     text = "\n".join(chunks)
     nodes, unknown = ap.parse_subscription(text, dedup=not cfg.get("no_dedup"))
+    rf = (cfg.get("region_filter") or "").strip()
+    if rf and nodes:
+        nodes = filter_by_region(nodes, rf)
     ipf = cfg.get("ip_filter", "all")
     if ipf in ("v4", "v6") and nodes:
         nodes = filter_by_ip_family(nodes, ipf)

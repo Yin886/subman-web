@@ -261,9 +261,11 @@ async function loadBundles(){
       + '<option value="all"'+(b.ip_filter==='all'?' selected':'')+'>全部</option>'
       + '<option value="v4"'+(b.ip_filter==='v4'?' selected':'')+'>仅 IPv4</option>'
       + '<option value="v6"'+(b.ip_filter==='v6'?' selected':'')+'>仅 IPv6</option>'
-      + '</select></label></div>'
+      + '</select></label>'
+      + '<label class="chk">只保留地区 <input type="text" data-brg="'+i+'" placeholder="如 香港，留空=全部" value="'+esc(b.region_filter||'')+'" style="max-width:90px"></label></div>'
       + '<div class="row"><button onclick="saveBundle('+i+')">💾 保存组合设置</button></div>'
       + '<div class="muted">当前合并 '+b.count+' 个节点'+(b.unknown?' (无法解析 '+b.unknown+' 行)':'')
+      + (b.region_filter ? ' 只保留'+esc(b.region_filter) : '')
       + (b.regions ? ' 覆盖地区 '+b.regions : '')
       + (b.updated ? ', 设置更新于 '+fmt(b.updated) : '')+'</div>'
       + '<div class="linkbox"><span style="flex:1">'+esc(b.link||'—')+'</span></div>'
@@ -287,7 +289,8 @@ async function saveBundle(i){
   const j = await api('/api/bundles?action=update','POST',{name: bundleNames[i], subs,
     no_dedup: card.querySelector('input[data-bnd]').checked,
     flags: card.querySelector('input[data-bfl]').checked,
-    ip_filter: card.querySelector('select[data-bip]').value});
+    ip_filter: card.querySelector('select[data-bip]').value,
+    region_filter: card.querySelector('input[data-brg]').value.trim()});
   if(!j.ok){ toast(j.error); return; }
   toast('已保存'); loadBundles();
 }
