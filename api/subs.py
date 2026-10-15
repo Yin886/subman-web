@@ -16,7 +16,10 @@ def _summary(store):
         out[name] = {"type": s["type"], "kind": s.get("kind", "uri"),
                      "count": s.get("count"),
                      "updated": s.get("fetched") or s.get("added"),
-                     "solo_token": s.get("solo_token")}
+                     "solo_token": s.get("solo_token"),
+                     "no_dedup": bool(s.get("no_dedup")),
+                     "flags": s.get("flags", True),
+                     "ip_filter": s.get("ip_filter", "all")}
     return out
 
 
@@ -42,7 +45,11 @@ class handler(BaseHTTPRequestHandler):
                                     "sub": {"name": name, "type": sub["type"],
                                             "url": sub.get("url", ""),
                                             "nodes": "\n".join(
-                                                sub.get("nodes", []))}})
+                                                sub.get("nodes", [])),
+                                            "no_dedup": bool(sub.get("no_dedup")),
+                                            "flags": sub.get("flags", True),
+                                            "ip_filter": sub.get("ip_filter",
+                                                                 "all")}})
             return
         summary = _summary(store)
         core.save_store(store)  # 补上老订阅缺失的 solo_token
@@ -90,6 +97,13 @@ class handler(BaseHTTPRequestHandler):
             if err:
                 hh.send_json(self, 400, {"ok": False, "error": err})
                 return
+            if "no_dedup" in body or "flags" in body or "ip_filter" in body:
+                err = core.set_sub_config(store, name, body.get("no_dedup"),
+                                          body.get("flags", True),
+                                          body.get("ip_filter", "all"))
+                if err:
+                    hh.send_json(self, 400, {"ok": False, "error": err})
+                    return
             core.save_store(store)
             hh.send_json(self, 200, {"ok": True, "subs": _summary(store)})
             return

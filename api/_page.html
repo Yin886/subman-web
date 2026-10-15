@@ -153,13 +153,23 @@ async function editSub(n){
   editingSub = n; editingType = j.sub.type;
   document.getElementById('edit_title').textContent = n;
   const body = document.getElementById('edit_body');
+  let h = '';
   if(j.sub.type==='url'){
-    body.innerHTML = '<label class="f">订阅链接</label><div class="row"><input type="text" id="edit_url" value="'+esc(j.sub.url)+'"></div>';
+    h += '<label class="f">订阅链接</label><div class="row"><input type="text" id="edit_url" value="'+esc(j.sub.url)+'"></div>';
     document.getElementById('edit_hint').textContent = '保存后点"更新"重新拉取。';
   }else{
-    body.innerHTML = '<label class="f">节点链接, 每行一条</label><textarea id="edit_nodes">'+esc(j.sub.nodes)+'</textarea>';
+    h += '<label class="f">节点链接, 每行一条</label><textarea id="edit_nodes">'+esc(j.sub.nodes)+'</textarea>';
     document.getElementById('edit_hint').textContent = '保存后直接生效。';
   }
+  h += '<label class="f">单独链接的发布设置(只影响这个订阅的单独链接)</label><div class="row">'
+    + '<label class="chk"><input type="checkbox" id="edit_nd" '+(j.sub.no_dedup?'checked':'')+'> 保留重复节点(不去重)</label>'
+    + '<label class="chk"><input type="checkbox" id="edit_fl" '+(j.sub.flags!==false?'checked':'')+'> 节点名称加上地区旗帜</label>'
+    + '<label class="chk">IP 筛选 <select id="edit_ip">'
+    + '<option value="all"'+(j.sub.ip_filter==='all'?' selected':'')+'>全部</option>'
+    + '<option value="v4"'+(j.sub.ip_filter==='v4'?' selected':'')+'>仅 IPv4</option>'
+    + '<option value="v6"'+(j.sub.ip_filter==='v6'?' selected':'')+'>仅 IPv6</option>'
+    + '</select></label></div>';
+  body.innerHTML = h;
   document.getElementById('edit_card').style.display = 'block';
   document.getElementById('edit_card').scrollIntoView({behavior:'smooth', block:'center'});
 }
@@ -177,6 +187,9 @@ async function saveEdit(){
     payload.nodes = document.getElementById('edit_nodes').value;
     if(!payload.nodes.trim()){ toast('节点不能为空'); return; }
   }
+  payload.no_dedup = document.getElementById('edit_nd').checked;
+  payload.flags = document.getElementById('edit_fl').checked;
+  payload.ip_filter = document.getElementById('edit_ip').value;
   const j = await api('/api/subs?action=edit','POST',payload);
   if(!j.ok){ toast(j.error); return; }
   cancelEdit(); toast('已保存'); loadSubs(); loadBundles();

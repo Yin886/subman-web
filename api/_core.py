@@ -114,7 +114,7 @@ def find_by_token(store, token):
             return ("bundle", bname, b)
     for name, s in store["subs"].items():
         if s.get("solo_token") == token:
-            return ("solo", name, store.get("solo_defaults", {}))
+            return ("solo", name, _solo_cfg(s))
     return None
 
 
@@ -124,13 +124,31 @@ def default_bundle_cfg():
 
 
 def default_store():
-    return {"subs": {}, "bundles": {},
-            "solo_defaults": {"no_dedup": False, "flags": True,
-                              "ip_filter": "all"}}
+    return {"subs": {}, "bundles": {}}
+
+
+def _solo_cfg(sub):
+    """单独订阅发布配置: 每个订阅独立。"""
+    return {"subs": [], "no_dedup": bool(sub.get("no_dedup")),
+            "flags": sub.get("flags", True),
+            "ip_filter": sub.get("ip_filter", "all")}
+
+
+def set_sub_config(store, name, no_dedup, flags, ip_filter):
+    sub = store["subs"].get(name)
+    if not sub:
+        return "没有这个订阅"
+    sub["no_dedup"] = bool(no_dedup)
+    sub["flags"] = bool(flags)
+    sub["ip_filter"] = ip_filter if ip_filter in ("all", "v4", "v6") else "all"
+    return None
 
 
 def _migrate(s):
-    """老数据迁移: 单 bundle -> bundles['默认组合'], 发布配置 -> solo_defaults。"""
+    """老数据迁移:
+    1) 单 bundle -> bundles['默认组合'], 发布配置 -> solo_defaults;
+    2) solo_defaults -> 每个订阅独立的发布配置(之后单独链接各用各的)。"""
+    changed = False
     if "bundle" in s and "bundles" not in s:
         old = s.pop("bundle") or {}
         s["bundles"] = {"默认组合": {
@@ -144,8 +162,20 @@ def _migrate(s):
             "no_dedup": bool(old.get("no_dedup")),
             "flags": old.get("flags", True),
             "ip_filter": old.get("ip_filter", "all")}
-        return True
-    return False
+        changed = True
+    sd = s.pop("solo_defaults", None)
+    if sd is not None:
+        for sub in s.get("subs", {}).values():
+            sub.setdefault("no_dedup", bool(sd.get("no_dedup")))
+            sub.setdefault("flags", sd.get("flags", True))
+            sub.setdefault("ip_filter", sd.get("ip_filter", "all"))
+        changed = True
+    for sub in s.get("subs", {}).values():
+        for k, v in (("no_dedup", False), ("flags", True), ("ip_filter", "all")):
+            if k not in sub:
+                sub[k] = v
+                changed = True
+    return changed
 
 
 def load_store():
@@ -156,8 +186,6 @@ def load_store():
             migrated = _migrate(s)
             s.setdefault("subs", {})
             s.setdefault("bundles", {})
-            s.setdefault("solo_defaults",
-                         {"no_dedup": False, "flags": True, "ip_filter": "all"})
             if migrated:
                 save_store(s)
             return s
@@ -229,7 +257,8 @@ def add_url_sub(store, name, url):
     now = _now()
     store["subs"][name] = {"type": "url", "url": url, "kind": "uri",
                            "added": now, "fetched": None, "count": None,
-                           "solo_token": unique_token(store)}
+                           "solo_token": unique_token(store),
+                           "no_dedup": False, "flags": True, "ip_filter": "all"}
     return None
 
 
@@ -259,7 +288,8 @@ def add_inline_sub(store, name, text, rename_prefix="", rename_start=1,
     now = _now()
     store["subs"][name] = {"type": "inline", "nodes": lines,
                            "added": now, "count": len(lines),
-                           "solo_token": unique_token(store)}
+                           "solo_token": unique_token(store),
+                           "no_dedup": False, "flags": True, "ip_filter": "all"}
     return None
 
 
@@ -287,12 +317,9 @@ def add_bundle(store, name):
         return "组合名 1-64 个字符, 不能含 / 或换行"
     if name in store["bundles"]:
         return f"已存在名为 {name} 的组合"
-    d = store.get("solo_defaults", {})
     store["bundles"][name] = {
         "token": unique_token(store), "subs": [],
-        "no_dedup": d.get("no_dedup", False),
-        "flags": d.get("flags", True),
-        "ip_filter": d.get("ip_filter", "all"),
+        "no_dedup": False, "flags": True, "ip_filter": "all",
         "updated": None}
     return None
 
