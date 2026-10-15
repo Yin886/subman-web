@@ -26,6 +26,7 @@ class handler(BaseHTTPRequestHandler):
             count, unknown, info, regions = 0, 0, [["-", 0, f"预览失败: {e}"]], []
         return {"bundle": {"subs": b["subs"], "no_dedup": b["no_dedup"],
                            "flags": b.get("flags", True),
+                           "ip_filter": b.get("ip_filter", "all"),
                            "updated": b["updated"], "token": b["token"]},
                 "link": core.public_link(host, b["token"]) if host else "",
                 "count": count, "unknown": unknown,
@@ -60,6 +61,10 @@ class handler(BaseHTTPRequestHandler):
         store["bundle"]["subs"] = subs
         store["bundle"]["no_dedup"] = bool(body.get("no_dedup"))
         store["bundle"]["flags"] = bool(body.get("flags", True))
+        ipf = body.get("ip_filter", "all")
+        if ipf not in ("all", "v4", "v6"):
+            ipf = "all"
+        store["bundle"]["ip_filter"] = ipf
         store["bundle"]["updated"] = core._now()
         core.save_store(store)
         hh.send_json(self, 200, {"ok": True, **self._bundle_info(store)})

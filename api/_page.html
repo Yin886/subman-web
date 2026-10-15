@@ -74,6 +74,14 @@ label.f{display:block;font-size:13px;color:#666;margin:8px 0 4px}
     <label class="chk"><input type="checkbox" id="no_dedup"> 保留重复节点(不去重)</label>
     <label class="chk"><input type="checkbox" id="flags" checked> 节点名称加上地区旗帜</label>
   </div>
+  <div class="row" style="align-items:center">
+    <label class="f" style="margin:0;white-space:nowrap">IP 筛选</label>
+    <select id="ip_filter" style="border:1px solid #ddd;border-radius:8px;padding:10px;font-size:14px">
+      <option value="all">全部</option>
+      <option value="v4">仅 IPv4</option>
+      <option value="v6">仅 IPv6</option>
+    </select>
+  </div>
   <div class="row"><button onclick="saveBundle()">💾 保存发布设置</button></div>
   <div id="bundle_info" class="muted"></div>
   <div class="linkbox"><span id="pub_link" style="flex:1">—</span></div>
@@ -163,6 +171,7 @@ async function loadBundle(){
   }).join('') || '<p class="muted">暂无订阅</p>';
   document.getElementById('no_dedup').checked = !!j.bundle.no_dedup;
   document.getElementById('flags').checked = j.bundle.flags !== false;
+  document.getElementById('ip_filter').value = j.bundle.ip_filter || 'all';
   document.getElementById('pub_link').textContent = j.link || '—';
   document.getElementById('bundle_info').textContent =
     '当前合并 '+j.count+' 个节点'+(j.unknown?' (无法解析 '+j.unknown+' 行)':'')
@@ -173,7 +182,8 @@ async function saveBundle(){
   const subs = [...document.querySelectorAll('#bundle_subs input[data-sub]:checked')].map(e=>e.dataset.sub);
   const j = await api('/api/bundle','POST',{subs,
     no_dedup:document.getElementById('no_dedup').checked,
-    flags:document.getElementById('flags').checked});
+    flags:document.getElementById('flags').checked,
+    ip_filter:document.getElementById('ip_filter').value});
   if(!j.ok){ toast(j.error); return; }
   toast('已保存'); loadBundle();
 }

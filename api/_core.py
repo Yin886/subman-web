@@ -81,7 +81,8 @@ def new_token():
 def default_store():
     return {"subs": {},
             "bundle": {"token": new_token(), "subs": [],
-                       "no_dedup": False, "flags": True, "updated": None}}
+                       "no_dedup": False, "flags": True, "ip_filter": "all",
+                       "updated": None}}
 
 
 def load_store():
@@ -347,6 +348,59 @@ def auto_rename_nodes(store, lines):
     return out
 
 
+# ---------- IP 协议族筛选 ----------
+
+def dns_cache_key(host):
+    return f"subman:dns:{host.lower()}"
+
+
+def ip_families(host):
+    """返回 host 支持的协议族集合，如 {'v4','v6'}；解析失败返回 None。成功结果缓存。"""
+    host = (host or "").strip().lower()
+    if not host:
+        return None
+    cached = kv_get(dns_cache_key(host))
+    if cached is not None:
+        try:
+            return set(json.loads(cached))
+        except Exception:
+            pass
+    fams = set()
+    try:
+        import ipaddress
+        v = ipaddress.ip_address(host).version
+        fams.add("v4" if v == 4 else "v6")
+    except ValueError:
+        try:
+            import socket
+            for fam, *_ in socket.getaddrinfo(host, None, type=socket.SOCK_STREAM):
+                if fam == socket.AF_INET:
+                    fams.add("v4")
+                elif fam == socket.AF_INET6:
+                    fams.add("v6")
+        except Exception:
+            return None
+    kv_set(dns_cache_key(host), json.dumps(sorted(fams)))
+    return fams
+
+
+def filter_by_ip_family(nodes, family):
+    """只保留支持指定协议族的节点；解析不出结果的保留(fail-open)。"""
+    hosts = {n["host"].lower() for n in nodes if n.get("host")}
+    fam_map = {}
+    if hosts:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            for h, f in zip(hosts, ex.map(ip_families, hosts)):
+                fam_map[h] = f
+    out = []
+    for n in nodes:
+        fams = fam_map.get((n.get("host") or "").lower())
+        if fams is None or family in fams:
+            out.append(n)
+    return out
+
+
 # ---------- 合成订阅 ----------
 
 def build_bundle(store, allow_live_fetch=True):
@@ -383,6 +437,9 @@ def build_bundle(store, allow_live_fetch=True):
         info.append((name, len(ls), None))
     text = "\n".join(chunks)
     nodes, unknown = ap.parse_subscription(text, dedup=not b["no_dedup"])
+    ipf = b.get("ip_filter", "all")
+    if ipf in ("v4", "v6") and nodes:
+        nodes = filter_by_ip_family(nodes, ipf)
     regions = set()
     if b.get("flags", True) and nodes:
         regions = enrich_flags(nodes)
