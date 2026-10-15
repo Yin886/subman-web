@@ -98,13 +98,6 @@ class handler(BaseHTTPRequestHandler):
                 return
             if sub["type"] == "url":
                 err = core.edit_url_sub(store, name, body.get("url", ""))
-                if err:
-                    hh.send_json(self, 400, {"ok": False, "error": err})
-                    return
-                err = core.set_sub_rename(store, name,
-                                          body.get("rename_prefix", ""),
-                                          body.get("rename_start", 1),
-                                          body.get("auto_rename", False))
             else:
                 err = core.edit_inline_sub(
                     store, name, body.get("nodes", ""),

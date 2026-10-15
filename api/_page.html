@@ -148,20 +148,15 @@ async function editSub(n){
   document.getElementById('edit_title').textContent = n;
   const body = document.getElementById('edit_body');
   let h = '';
-  const rn_sec = (p)=>{
-    p = p||{};
-    return '<label class="f">重新命名(可选'+(j.sub.type==='url'?'，对拉取到的节点生效':'，不填则保留原节点名')+')</label>'
-      + '<div class="row"><input type="text" id="edit_prefix" placeholder="命名前缀(可选，如 香港)" value="'+esc(p.rename_prefix||'')+'">'
-      + '<input type="text" id="edit_start" placeholder="起始编号" value="'+(p.rename_start||1)+'" style="max-width:90px"></div>'
-      + '<div class="row"><label class="chk"><input type="checkbox" id="edit_auto" '+(p.auto_rename?'checked':'')+'> 自动按地区命名(编号接着已有订阅往下排)</label></div>';
-  };
   if(j.sub.type==='url'){
-    h += '<label class="f">订阅链接</label><div class="row"><input type="text" id="edit_url" value="'+esc(j.sub.url)+'"></div>'
-      + rn_sec(j.sub);
-    document.getElementById('edit_hint').textContent = '改了链接要点"更新"重新拉取；重命名保存后直接生效。';
+    h += '<label class="f">订阅链接</label><div class="row"><input type="text" id="edit_url" value="'+esc(j.sub.url)+'"></div>';
+    document.getElementById('edit_hint').textContent = '保存后点"更新"重新拉取。';
   }else{
     h += '<label class="f">节点链接, 每行一条</label><textarea id="edit_nodes">'+esc(j.sub.nodes)+'</textarea>'
-      + rn_sec(null);
+      + '<label class="f">重新命名(可选，不填则保留原节点名)</label>'
+      + '<div class="row"><input type="text" id="edit_prefix" placeholder="命名前缀(可选，如 香港)">'
+      + '<input type="text" id="edit_start" placeholder="起始编号" value="1" style="max-width:90px"></div>'
+      + '<div class="row"><label class="chk"><input type="checkbox" id="edit_auto"> 自动按地区命名(编号接着已有订阅往下排)</label></div>';
     document.getElementById('edit_hint').textContent = '保存后直接生效。';
   }
   h += '<label class="f">单独链接的发布设置(只影响这个订阅的单独链接)</label><div class="row">'
@@ -188,10 +183,10 @@ async function saveEdit(){
     if(!payload.url){ toast('链接不能为空'); return; }
   }else{
     payload.nodes = document.getElementById('edit_nodes').value;
+    payload.rename_prefix = document.getElementById('edit_prefix').value.trim();
+    payload.rename_start = parseInt(document.getElementById('edit_start').value)||1;
+    payload.auto_rename = document.getElementById('edit_auto').checked;
   }
-  payload.rename_prefix = document.getElementById('edit_prefix').value.trim();
-  payload.rename_start = parseInt(document.getElementById('edit_start').value)||1;
-  payload.auto_rename = document.getElementById('edit_auto').checked;
   payload.no_dedup = document.getElementById('edit_nd').checked;
   payload.flags = document.getElementById('edit_fl').checked;
   payload.ip_filter = document.getElementById('edit_ip').value;
