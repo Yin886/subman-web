@@ -489,7 +489,7 @@ def _now():
 
 # ---------- 地区旗帜(GeoIP) ----------
 
-FLAG_RE = re.compile(r"^(?:[\U0001F1E6-\U0001F1FF]{2}\s*)+")
+FLAG_RE = re.compile(r"^(?:[\U0001F1E6-\U0001F1FF]\uFE0F?\s*)+")
 
 COUNTRY_ZH = {
     "HK": "香港", "TW": "台湾", "MO": "澳门", "CN": "中国",
@@ -516,6 +516,29 @@ COUNTRY_ZH = {
 
 def strip_leading_flags(name):
     return FLAG_RE.sub("", name or "").strip()
+
+
+_ZH_TO_CC = {v: k for k, v in COUNTRY_ZH.items()}
+
+
+def cc_from_leading_flag(name):
+    """从节点名开头的旗帜 emoji 反推两位国家代码，取不到返回 None。"""
+    m = re.match(r"^((?:[\U0001F1E6-\U0001F1FF]\uFE0F?){2})", name or "")
+    if not m:
+        return None
+    ris = [c for c in m.group(1) if c != "\uFE0F"]
+    if len(ris) != 2:
+        return None
+    return "".join(chr(ord(c) - 0x1F1E6 + ord("A")) for c in ris)
+
+
+def cc_from_name_text(name):
+    """从节点名开头的地区文字（如“台湾”）反推国家代码，取不到返回 None。"""
+    base = strip_leading_flags(name)
+    for zh, cc in _ZH_TO_CC.items():
+        if base.startswith(zh):
+            return cc
+    return None
 
 
 def flag_emoji(cc):
@@ -585,6 +608,10 @@ def enrich_flags(nodes):
     regions = set()
     for n in nodes:
         cc = cc_map.get((n.get("host") or "").lower())
+        if not cc:
+            # GeoIP 查不出（如机场内网域名公网无解析）：从节点名自带的旗帜或地区文字反推
+            orig = n.get("name") or ""
+            cc = cc_from_leading_flag(orig) or cc_from_name_text(orig)
         if not cc:
             continue
         regions.add(cc)
