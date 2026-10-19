@@ -522,6 +522,10 @@ def flag_emoji(cc):
     cc = (cc or "").upper()
     if len(cc) != 2 or not cc.isalpha():
         return ""
+    if cc == "TW":
+        # 中国地区 iPhone 上 🇹🇼 会被系统显示成字母 "TW"，画不出旗帜；
+        # 台湾节点改用纯文字命名（台湾1、台湾2…），保证正常显示。
+        return ""
     return "".join(chr(0x1F1E6 + ord(c) - ord("A")) for c in cc)
 
 
